@@ -33,6 +33,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.auron.AuronConverters.ForceNativeExecutionWrapperBase
 import org.apache.spark.sql.auron.NativeConverters.NativeExprWrapperBase
+import org.apache.spark.sql.auron.join.JoinBuildSides.{JoinBuildLeft, JoinBuildRight, JoinBuildSide}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -42,6 +43,7 @@ import org.apache.spark.sql.catalyst.expressions.Like
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.expressions.SortOrder
+import org.apache.spark.sql.catalyst.expressions.SparkPartitionID
 import org.apache.spark.sql.catalyst.expressions.StringSplit
 import org.apache.spark.sql.catalyst.expressions.TaggingExpression
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
@@ -50,14 +52,7 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.First
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.BroadcastMode
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
-import org.apache.spark.sql.execution.CoalescedPartitionSpec
-import org.apache.spark.sql.execution.FileSourceScanExec
-import org.apache.spark.sql.execution.PartialMapperPartitionSpec
-import org.apache.spark.sql.execution.PartialReducerPartitionSpec
-import org.apache.spark.sql.execution.ShuffledRowRDD
-import org.apache.spark.sql.execution.ShufflePartitionSpec
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.UnaryExecNode
+import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.{AdaptiveSparkPlanExec, BroadcastQueryStageExec, QueryStageExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.auron.plan._
 import org.apache.spark.sql.execution.auron.plan.ConvertToNativeExec
@@ -95,16 +90,15 @@ import org.apache.spark.sql.execution.auron.plan.NativeWindowBase
 import org.apache.spark.sql.execution.auron.plan.NativeWindowExec
 import org.apache.spark.sql.execution.auron.shuffle.{AuronBlockStoreShuffleReaderBase, AuronRssShuffleManagerBase, RssPartitionWriterBase}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ReusedExchangeExec}
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ReusedExchangeExec, ShuffleExchangeExec}
+import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec, ShuffledHashJoinExec}
 import org.apache.spark.sql.execution.joins.auron.plan.NativeBroadcastJoinExec
 import org.apache.spark.sql.execution.joins.auron.plan.NativeShuffledHashJoinExecProvider
 import org.apache.spark.sql.execution.joins.auron.plan.NativeSortMergeJoinExecProvider
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLShuffleReadMetricsReporter}
 import org.apache.spark.sql.execution.ui.{AuronEventUtils, AuronSQLAppStatusListener, AuronSQLAppStatusStore, AuronSQLTab}
 import org.apache.spark.sql.hive.execution.InsertIntoHiveTable
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{ArrayType, DataType, IntegerType, StringType}
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.storage.BlockManagerId
 import org.apache.spark.storage.FileSegment
@@ -229,7 +223,7 @@ class ShimsImpl extends Shims with Logging {
       leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      broadcastSide: BroadcastSide,
+      broadcastSide: JoinBuildSide,
       isNullAwareAntiJoin: Boolean): NativeBroadcastJoinBase =
     NativeBroadcastJoinExec(
       left,
@@ -262,7 +256,7 @@ class ShimsImpl extends Shims with Logging {
       leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      buildSide: BuildSide,
+      buildSide: JoinBuildSide,
       isSkewJoin: Boolean): SparkPlan =
     NativeShuffledHashJoinExecProvider.provide(
       left,
@@ -290,16 +284,38 @@ class ShimsImpl extends Shims with Logging {
       child: SparkPlan): NativeGenerateBase =
     NativeGenerateExec(generator, requiredChildOutput, outer, generatorOutput, child)
 
-  override def createNativeGlobalLimitExec(limit: Long, child: SparkPlan): NativeGlobalLimitBase =
-    NativeGlobalLimitExec(limit, child)
+  private def effectiveLimit(rawLimit: Int): Int =
+    if (rawLimit == -1) Int.MaxValue else rawLimit
 
-  override def createNativeLocalLimitExec(limit: Long, child: SparkPlan): NativeLocalLimitBase =
+  @sparkver("3.4 / 3.5")
+  override def getLimitAndOffset(plan: GlobalLimitExec): (Int, Int) = {
+    (effectiveLimit(plan.limit), plan.offset)
+  }
+
+  @sparkver("3.4 / 3.5")
+  override def getLimitAndOffset(plan: TakeOrderedAndProjectExec): (Int, Int) = {
+    (effectiveLimit(plan.limit), plan.offset)
+  }
+
+  override def createNativeGlobalLimitExec(
+      limit: Int,
+      offset: Int,
+      child: SparkPlan): NativeGlobalLimitBase =
+    NativeGlobalLimitExec(limit, offset, child)
+
+  override def createNativeLocalLimitExec(limit: Int, child: SparkPlan): NativeLocalLimitBase =
     NativeLocalLimitExec(limit, child)
+
+  @sparkver("3.4 / 3.5")
+  override def getLimitAndOffset(plan: CollectLimitExec): (Int, Int) = {
+    (effectiveLimit(plan.limit), plan.offset)
+  }
 
   override def createNativeCollectLimitExec(
       limit: Int,
+      offset: Int,
       child: SparkPlan): NativeCollectLimitBase =
-    NativeCollectLimitExec(limit, child)
+    NativeCollectLimitExec(limit, offset, child)
 
   override def createNativeParquetInsertIntoHiveTableExec(
       cmd: InsertIntoHiveTable,
@@ -336,13 +352,14 @@ class ShimsImpl extends Shims with Logging {
     NativeSortExec(sortOrder, global, child)
 
   override def createNativeTakeOrderedExec(
-      limit: Long,
+      limit: Int,
+      offset: Int,
       sortOrder: Seq[SortOrder],
       child: SparkPlan): NativeTakeOrderedBase =
-    NativeTakeOrderedExec(limit, sortOrder, child)
+    NativeTakeOrderedExec(limit, offset, sortOrder, child)
 
   override def createNativePartialTakeOrderedExec(
-      limit: Long,
+      limit: Int,
       sortOrder: Seq[SortOrder],
       child: SparkPlan,
       metrics: Map[String, SQLMetric]): NativePartialTakeOrderedBase =
@@ -521,11 +538,19 @@ class ShimsImpl extends Shims with Logging {
       isPruningExpr: Boolean,
       fallback: Expression => pb.PhysicalExprNode): Option[pb.PhysicalExprNode] = {
     e match {
+      case _: SparkPartitionID =>
+        Some(
+          pb.PhysicalExprNode
+            .newBuilder()
+            .setSparkPartitionIdExpr(pb.SparkPartitionIdExprNode.newBuilder())
+            .build())
+
       case StringSplit(str, pat @ Literal(_, StringType), Literal(-1, IntegerType))
           // native StringSplit implementation does not support regex, so only most frequently
           // used cases without regex are supported
-          if Seq(",", ", ", ":", ";", "#", "@", "_", "-", "\\|", "\\.").contains(pat.value) =>
-        val nativePat = pat.value match {
+          if Seq(",", ", ", ":", ";", "#", "@", "_", "-", "\\|", "\\.").contains(
+            pat.value.toString) =>
+        val nativePat = pat.value.toString match {
           case "\\|" => "|"
           case "\\." => "."
           case other => other
@@ -541,7 +566,7 @@ class ShimsImpl extends Shims with Logging {
                 .addArgs(NativeConverters.convertExprWithFallback(str, isPruningExpr, fallback))
                 .addArgs(NativeConverters
                   .convertExprWithFallback(Literal(nativePat), isPruningExpr, fallback))
-                .setReturnType(NativeConverters.convertDataType(StringType)))
+                .setReturnType(NativeConverters.convertDataType(ArrayType(StringType))))
             .build())
 
       case e: TaggingExpression =>
@@ -1037,6 +1062,61 @@ class ShimsImpl extends Shims with Logging {
   override def getAdaptiveInputPlan(exec: AdaptiveSparkPlanExec): SparkPlan = {
     exec.inputPlan
   }
+
+  private def convertJoinBuildSide(
+      exec: SparkPlan,
+      isBuildLeft: Any => Boolean): JoinBuildSide = {
+    exec match {
+      case shj: ShuffledHashJoinExec =>
+        if (isBuildLeft(shj.buildSide)) JoinBuildLeft else JoinBuildRight
+      case bhj: BroadcastHashJoinExec =>
+        if (isBuildLeft(bhj.buildSide)) JoinBuildLeft else JoinBuildRight
+      case bnlj: BroadcastNestedLoopJoinExec =>
+        if (isBuildLeft(bnlj.buildSide)) JoinBuildLeft else JoinBuildRight
+      case other => throw new IllegalArgumentException(s"Unsupported SparkPlan type: $other")
+    }
+  }
+
+  @sparkver("3.0")
+  override def getJoinBuildSide(exec: SparkPlan): JoinBuildSide = {
+    import org.apache.spark.sql.execution.joins.BuildLeft
+    convertJoinBuildSide(
+      exec,
+      isBuildLeft = {
+        case BuildLeft => true
+        case _ => false
+      })
+  }
+
+  @sparkver("3.1 / 3.2 / 3.3 / 3.4 / 3.5")
+  override def getJoinBuildSide(exec: SparkPlan): JoinBuildSide = {
+    import org.apache.spark.sql.catalyst.optimizer.BuildLeft
+    convertJoinBuildSide(
+      exec,
+      isBuildLeft = {
+        case BuildLeft => true
+        case _ => false
+      })
+  }
+
+  @sparkver("3.2 / 3.3 / 3.4 / 3.5")
+  override def getIsSkewJoinFromSHJ(exec: ShuffledHashJoinExec): Boolean = exec.isSkewJoin
+
+  @sparkver("3.0 / 3.1")
+  override def getIsSkewJoinFromSHJ(exec: ShuffledHashJoinExec): Boolean = false
+
+  @sparkver("3.1 / 3.2 / 3.3 / 3.4 / 3.5")
+  override def getShuffleOrigin(exec: ShuffleExchangeExec): Option[Any] = Some(exec.shuffleOrigin)
+
+  @sparkver("3.0")
+  override def getShuffleOrigin(exec: ShuffleExchangeExec): Option[Any] = None
+
+  @sparkver("3.1 / 3.2 / 3.3 / 3.4 / 3.5")
+  override def isNullAwareAntiJoin(exec: BroadcastHashJoinExec): Boolean =
+    exec.isNullAwareAntiJoin
+
+  @sparkver("3.0")
+  override def isNullAwareAntiJoin(exec: BroadcastHashJoinExec): Boolean = false
 }
 
 case class ForceNativeExecutionWrapper(override val child: SparkPlan)

@@ -21,6 +21,9 @@ version = "0.1.0"
 edition = "2024"
 resolver = "1"
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -54,6 +57,7 @@ panic-message = { workspace = true }
 prost = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
+parking_lot = { workspace = true }
 
 [dependencies.tikv-jemalloc-ctl]
 version = "0.6.1"

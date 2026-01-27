@@ -112,6 +112,7 @@ pub struct PhysicalPlanner {
     partition_id: usize,
 }
 
+#[allow(clippy::panic)] // Temporarily allow panic to refactor to Result later
 impl PhysicalPlanner {
     pub fn new(partition_id: usize) -> Self {
         Self { partition_id }
@@ -123,8 +124,7 @@ impl PhysicalPlanner {
     ) -> Result<Arc<dyn ExecutionPlan>, PlanError> {
         let plan = spark_plan.physical_plan_type.as_ref().ok_or_else(|| {
             proto_error(format!(
-                "physical_plan::from_proto() Unsupported physical plan '{:?}'",
-                spark_plan
+                "physical_plan::from_proto() Unsupported physical plan '{spark_plan:?}'"
             ))
         })?;
         match plan {
@@ -164,7 +164,11 @@ impl PhysicalPlanner {
                 Ok(Arc::new(FilterExec::try_new(predicates, input)?))
             }
             PhysicalPlanType::ParquetScan(scan) => {
-                let conf: FileScanConfig = scan.base_conf.as_ref().unwrap().try_into()?;
+                let conf: FileScanConfig = scan
+                    .base_conf
+                    .as_ref()
+                    .expect("base_conf must be set for ParquetScan")
+                    .try_into()?;
                 let predicate = scan
                     .pruning_predicates
                     .iter()
@@ -182,7 +186,11 @@ impl PhysicalPlanner {
                 )))
             }
             PhysicalPlanType::OrcScan(scan) => {
-                let conf: FileScanConfig = scan.base_conf.as_ref().unwrap().try_into()?;
+                let conf: FileScanConfig = scan
+                    .base_conf
+                    .as_ref()
+                    .expect("base_conf must be set for OrcScan")
+                    .try_into()?;
                 let predicate = scan
                     .pruning_predicates
                     .iter()
@@ -207,10 +215,16 @@ impl PhysicalPlanner {
                     .on
                     .iter()
                     .map(|col| {
-                        let left_key = self
-                            .try_parse_physical_expr(&col.left.as_ref().unwrap(), &left.schema())?;
+                        let left_key = self.try_parse_physical_expr(
+                            col.left
+                                .as_ref()
+                                .expect("hash join: left join key must be present"),
+                            &left.schema(),
+                        )?;
                         let right_key = self.try_parse_physical_expr(
-                            &col.right.as_ref().unwrap(),
+                            col.right
+                                .as_ref()
+                                .expect("hash join: right join key must be present"),
                             &right.schema(),
                         )?;
                         Ok((left_key, right_key))
@@ -249,10 +263,16 @@ impl PhysicalPlanner {
                     .on
                     .iter()
                     .map(|col| {
-                        let left_key = self
-                            .try_parse_physical_expr(&col.left.as_ref().unwrap(), &left.schema())?;
+                        let left_key = self.try_parse_physical_expr(
+                            col.left
+                                .as_ref()
+                                .expect("sort-merge join: left join key must be present"),
+                            &left.schema(),
+                        )?;
                         let right_key = self.try_parse_physical_expr(
-                            &col.right.as_ref().unwrap(),
+                            col.right
+                                .as_ref()
+                                .expect("sort-merge join: right join key must be present"),
                             &right.schema(),
                         )?;
                         Ok((left_key, right_key))
@@ -294,7 +314,7 @@ impl PhysicalPlanner {
 
                 Ok(Arc::new(ShuffleWriterExec::try_new(
                     input,
-                    output_partitioning.unwrap(),
+                    output_partitioning.expect("shuffle writer: output_partitioning must be set"),
                     shuffle_writer.output_data_file.clone(),
                     shuffle_writer.output_index_file.clone(),
                 )?))
@@ -314,7 +334,8 @@ impl PhysicalPlanner {
                 )?;
                 Ok(Arc::new(RssShuffleWriterExec::try_new(
                     input,
-                    output_partitioning.unwrap(),
+                    output_partitioning
+                        .expect("rss shuffle writer: output_partitioning must be set"),
                     rss_shuffle_writer.rss_partition_writer_resource_id.clone(),
                 )?))
             }
@@ -357,15 +378,15 @@ impl PhysicalPlanner {
                 let exprs = self
                     .try_parse_physical_sort_expr(&input, sort)
                     .unwrap_or_else(|e| {
-                        panic!("Failed to parse physical sort expressions: {}", e);
+                        panic!("Failed to parse physical sort expressions: {e}");
                     });
 
+                let fetch = sort.fetch_limit.as_ref();
+                let limit = fetch.map(|f| f.limit as usize);
+                let offset = fetch.map(|f| f.offset as usize).unwrap_or(0);
+
                 // always preserve partitioning
-                Ok(Arc::new(SortExec::new(
-                    input,
-                    exprs,
-                    sort.fetch_limit.as_ref().map(|limit| limit.limit as usize),
-                )))
+                Ok(Arc::new(SortExec::new(input, exprs, limit, offset)))
             }
             PhysicalPlanType::BroadcastJoinBuildHashMap(bhm) => {
                 let input: Arc<dyn ExecutionPlan> = convert_box_required!(self, bhm.input)?;
@@ -386,10 +407,16 @@ impl PhysicalPlanner {
                     .on
                     .iter()
                     .map(|col| {
-                        let left_key = self
-                            .try_parse_physical_expr(&col.left.as_ref().unwrap(), &left.schema())?;
+                        let left_key = self.try_parse_physical_expr(
+                            col.left
+                                .as_ref()
+                                .expect("broadcast join: left join key must be present"),
+                            &left.schema(),
+                        )?;
                         let right_key = self.try_parse_physical_expr(
-                            &col.right.as_ref().unwrap(),
+                            col.right
+                                .as_ref()
+                                .expect("broadcast join: right join key must be present"),
                             &right.schema(),
                         )?;
                         Ok((left_key, right_key))
@@ -488,11 +515,9 @@ impl PhysicalPlanner {
                     .zip(agg.grouping_expr_name.iter())
                     .map(|(expr, name)| {
                         self.try_parse_physical_expr(expr, &input_schema)
-                            .and_then(|expr| {
-                                Ok(GroupingExpr {
-                                    expr,
-                                    field_name: name.to_owned(),
-                                })
+                            .map(|expr| GroupingExpr {
+                                expr,
+                                field_name: name.to_owned(),
                             })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
@@ -527,7 +552,7 @@ impl PhysicalPlanner {
 
                         let agg = match AggFunction::from(agg_function) {
                             AggFunction::Udaf => {
-                                let udaf = agg_node.udaf.as_ref().unwrap();
+                                let udaf = agg_node.udaf.as_ref().expect("udaf missing");
                                 let serialized = udaf.serialized.clone();
                                 create_udaf_agg(serialized, return_type, agg_children_exprs)?
                             }
@@ -557,7 +582,11 @@ impl PhysicalPlanner {
             }
             PhysicalPlanType::Limit(limit) => {
                 let input: Arc<dyn ExecutionPlan> = convert_box_required!(self, limit.input)?;
-                Ok(Arc::new(LimitExec::new(input, limit.limit)))
+                Ok(Arc::new(LimitExec::new(
+                    input,
+                    limit.limit as usize,
+                    limit.offset as usize,
+                )))
             }
             PhysicalPlanType::FfiReader(ffi_reader) => {
                 let schema = Arc::new(convert_required!(ffi_reader.schema)?);
@@ -570,7 +599,11 @@ impl PhysicalPlanner {
             PhysicalPlanType::CoalesceBatches(coalesce_batches) => {
                 let input: Arc<dyn ExecutionPlan> =
                     convert_box_required!(self, coalesce_batches.input)?;
-                Ok(Arc::new(LimitExec::new(input, coalesce_batches.batch_size)))
+                Ok(Arc::new(LimitExec::new(
+                    input,
+                    coalesce_batches.batch_size as usize,
+                    0,
+                )))
             }
             PhysicalPlanType::Expand(expand) => {
                 let schema = Arc::new(convert_required!(expand.schema)?);
@@ -600,8 +633,7 @@ impl PhysicalPlanner {
                                 .as_ref()
                                 .ok_or_else(|| {
                                     proto_error(format!(
-                                        "physical_plan::from_proto() Unexpected sort expr {:?}",
-                                        spark_plan
+                                        "physical_plan::from_proto() Unexpected sort expr {spark_plan:?}"
                                     ))
                                 })?
                                 .try_into()?,
@@ -690,8 +722,7 @@ impl PhysicalPlanner {
                                 .as_ref()
                                 .ok_or_else(|| {
                                     proto_error(format!(
-                                        "physical_plan::from_proto() Unexpected sort expr {:?}",
-                                        spark_plan
+                                        "physical_plan::from_proto() Unexpected sort expr {spark_plan:?}"
                                     ))
                                 })?
                                 .as_ref();
@@ -704,8 +735,7 @@ impl PhysicalPlanner {
                             })
                         } else {
                             Err(PlanSerDeError::General(format!(
-                                "physical_plan::from_proto() {:?}",
-                                spark_plan
+                                "physical_plan::from_proto() {spark_plan:?}"
                             )))
                         }
                     })
@@ -753,7 +783,7 @@ impl PhysicalPlanner {
                         children,
                     )?,
                     GenerateFunction::Udtf => {
-                        let udtf = pb_generator.udtf.as_ref().unwrap();
+                        let udtf = pb_generator.udtf.as_ref().expect("udtf missing");
                         let serialized = udtf.serialized.clone();
                         let return_schema = Arc::new(convert_required!(udtf.return_schema)?);
                         create_udtf_generator(serialized, return_schema, children)?
@@ -859,7 +889,7 @@ impl PhysicalPlanner {
                         Ok(e)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                in_list(expr, list_exprs, &e.negated, &input_schema)?
+                in_list(expr, list_exprs, &e.negated, input_schema)?
             }
             ExprType::Case(e) => Arc::new(CaseExpr::try_new(
                 e.expr
@@ -906,7 +936,7 @@ impl PhysicalPlanner {
                         self.partition_id,
                     )?;
                     Arc::new(create_udf(
-                        &format!("spark_ext_function_{}", fun_name),
+                        &format!("spark_ext_function_{fun_name}"),
                         args.iter()
                             .map(|e| e.data_type(input_schema))
                             .collect::<Result<Vec<_>, _>>()?,
@@ -983,6 +1013,9 @@ impl PhysicalPlanner {
                 Arc::new(StringContainsExpr::new(expr, e.infix.clone()))
             }
             ExprType::RowNumExpr(_) => Arc::new(RowNumExpr::default()),
+            ExprType::SparkPartitionIdExpr(_) => {
+                Arc::new(SparkPartitionIdExpr::new(self.partition_id))
+            }
             ExprType::BloomFilterMightContainExpr(e) => Arc::new(BloomFilterMightContainExpr::new(
                 e.uuid.clone(),
                 self.try_parse_physical_expr_box_required(&e.bloom_filter_expr, input_schema)?,
@@ -1055,8 +1088,7 @@ impl PhysicalPlanner {
             .map(|expr| {
                 let expr = expr.expr_type.as_ref().ok_or_else(|| {
                     proto_error(format!(
-                        "physical_plan::from_proto() Unexpected expr {:?}",
-                        input
+                        "physical_plan::from_proto() Unexpected expr {input:?}"
                     ))
                 })?;
                 if let ExprType::Sort(sort_expr) = expr {
@@ -1065,8 +1097,7 @@ impl PhysicalPlanner {
                         .as_ref()
                         .ok_or_else(|| {
                             proto_error(format!(
-                                "physical_plan::from_proto() Unexpected sort expr {:?}",
-                                input
+                                "physical_plan::from_proto() Unexpected sort expr {input:?}"
                             ))
                         })?
                         .as_ref();
@@ -1079,8 +1110,7 @@ impl PhysicalPlanner {
                     })
                 } else {
                     Err(PlanSerDeError::General(format!(
-                        "physical_plan::from_proto() {:?}",
-                        input
+                        "physical_plan::from_proto() {input:?}"
                     )))
                 }
             })
@@ -1096,8 +1126,7 @@ impl PhysicalPlanner {
         partitioning.map_or(Ok(None), |p| {
             let plan = p.repartition_type.as_ref().ok_or_else(|| {
                 proto_error(format!(
-                    "partition::from_proto() Unsupported partition '{:?}'",
-                    p
+                    "partition::from_proto() Unsupported partition '{p:?}'"
                 ))
             })?;
             match plan {
@@ -1113,13 +1142,19 @@ impl PhysicalPlanner {
                         .collect::<Result<Vec<PhysicalExprRef>, _>>()?;
                     Ok(Some(Partitioning::HashPartitioning(
                         expr,
-                        hash_part.partition_count.try_into().unwrap(),
+                        hash_part
+                            .partition_count
+                            .try_into()
+                            .expect("Invalid partition_count type"),
                     )))
                 }
 
                 RepartitionType::RoundRobinRepartition(round_robin_part) => {
                     Ok(Some(Partitioning::RoundRobinPartitioning(
-                        round_robin_part.partition_count.try_into().unwrap(),
+                        round_robin_part
+                            .partition_count
+                            .try_into()
+                            .expect("Invalid partition_count type"),
                     )))
                 }
 
@@ -1127,11 +1162,14 @@ impl PhysicalPlanner {
                     if range_part.partition_count == 1 {
                         Ok(Some(Partitioning::SinglePartitioning()))
                     } else {
-                        let sort = range_part.sort_expr.clone().unwrap();
+                        let sort = range_part
+                            .sort_expr
+                            .clone()
+                            .expect("Invalid partition_count type");
                         let exprs = self
                             .try_parse_physical_sort_expr(&input, &sort)
                             .unwrap_or_else(|e| {
-                                panic!("Failed to parse physical sort expressions: {}", e);
+                                panic!("Failed to parse physical sort expressions: {e}");
                             });
 
                         let value_list: Vec<ScalarValue> = range_part
@@ -1156,7 +1194,7 @@ impl PhysicalPlanner {
                             .iter()
                             .map(|x| {
                                 if let ScalarValue::List(single) = x {
-                                    return single.value(0);
+                                    single.value(0)
                                 } else {
                                     unreachable!("expect list scalar value");
                                 }
@@ -1166,7 +1204,10 @@ impl PhysicalPlanner {
                         let bound_rows = sort_row_converter.lock().convert_columns(&bound_cols)?;
                         Ok(Some(Partitioning::RangePartitioning(
                             exprs,
-                            range_part.partition_count.try_into().unwrap(),
+                            range_part
+                                .partition_count
+                                .try_into()
+                                .expect("Invalid partition_count type"),
                             Arc::new(bound_rows),
                         )))
                     }
@@ -1336,12 +1377,12 @@ impl From<&protobuf::ColumnStats> for ColumnStatistics {
             max_value: cs
                 .max_value
                 .as_ref()
-                .map(|m| Precision::Exact(m.try_into().unwrap()))
+                .map(|m| Precision::Exact(m.try_into().expect("invalid max_value")))
                 .unwrap_or(Precision::Absent),
             min_value: cs
                 .min_value
                 .as_ref()
-                .map(|m| Precision::Exact(m.try_into().unwrap()))
+                .map(|m| Precision::Exact(m.try_into().expect("invalid min_value")))
                 .unwrap_or(Precision::Absent),
             sum_value: Precision::Absent,
             distinct_count: Precision::Exact(cs.distinct_count as usize),

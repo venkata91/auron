@@ -87,9 +87,13 @@ macro_rules! jni_map_error_with_env {
         match $result {
             Ok(result) => $crate::jni_bridge::datafusion::error::Result::Ok(result),
             Err($crate::jni_bridge::jni::errors::Error::JavaException) => {
-                let ex = $env.exception_occurred().unwrap();
-                $env.exception_describe().unwrap();
-                $env.exception_clear().unwrap();
+                let ex = $env
+                    .exception_occurred()
+                    .expect("failed to obtain pending Java execption object");
+                $env.exception_describe()
+                    .expect("failed to print Java exception to stderr");
+                $env.exception_clear()
+                    .expect("failed to clear pending Java exception");
                 let message_obj = $env
                     .call_method_unchecked(
                         ex,
@@ -102,13 +106,13 @@ macro_rules! jni_map_error_with_env {
                             .clone(),
                         &[],
                     )
-                    .unwrap()
+                    .expect("call Java Throwable.toString() failed")
                     .l()
-                    .unwrap();
+                    .expect("expected object return from Throwable.toString()");
                 let message = $env
                     .get_string(message_obj.into())
                     .map(|s| String::from(s))
-                    .unwrap();
+                    .expect("failed to read Throwable.toString() result as Java string");
 
                 Err(
                     $crate::jni_bridge::datafusion::error::DataFusionError::External(
@@ -1412,10 +1416,10 @@ pub struct SparkUDAFWrapperContext<'a> {
     pub method_merge_ret: ReturnType,
     pub method_eval: JMethodID,
     pub method_eval_ret: ReturnType,
-    pub method_serializeRows: JMethodID,
-    pub method_serializeRows_ret: ReturnType,
-    pub method_deserializeRows: JMethodID,
-    pub method_deserializeRows_ret: ReturnType,
+    pub method_exportRows: JMethodID,
+    pub method_exportRows_ret: ReturnType,
+    pub method_importRows: JMethodID,
+    pub method_importRows_ret: ReturnType,
     pub method_spill: JMethodID,
     pub method_spill_ret: ReturnType,
     pub method_unspill: JMethodID,
@@ -1467,18 +1471,18 @@ impl<'a> SparkUDAFWrapperContext<'a> {
                 "(Lorg/apache/spark/sql/auron/BufferRowsColumn;[IJ)V",
             )?,
             method_eval_ret: ReturnType::Primitive(Primitive::Void),
-            method_serializeRows: env.get_method_id(
+            method_exportRows: env.get_method_id(
                 class,
-                "serializeRows",
-                "(Lorg/apache/spark/sql/auron/BufferRowsColumn;[I)[B",
+                "exportRows",
+                "(Lorg/apache/spark/sql/auron/BufferRowsColumn;[IJ)V",
             )?,
-            method_serializeRows_ret: ReturnType::Array,
-            method_deserializeRows: env.get_method_id(
+            method_exportRows_ret: ReturnType::Primitive(Primitive::Void),
+            method_importRows: env.get_method_id(
                 class,
-                "deserializeRows",
-                "(Ljava/nio/ByteBuffer;)Lorg/apache/spark/sql/auron/BufferRowsColumn;",
+                "importRows",
+                "(J)Lorg/apache/spark/sql/auron/BufferRowsColumn;",
             )?,
-            method_deserializeRows_ret: ReturnType::Object,
+            method_importRows_ret: ReturnType::Object,
             method_spill: env.get_method_id(
                 class,
                 "spill",

@@ -116,6 +116,10 @@ impl<C: AccCollectionColumn> Agg for AggGenericCollect<C> {
         col
     }
 
+    fn acc_array_data_types(&self) -> &[DataType] {
+        &[DataType::Binary]
+    }
+
     fn partial_update(
         &self,
         accs: &mut AccColumnRef,
@@ -292,15 +296,23 @@ impl AccColumn for AccSetColumn {
         self.mem_used + self.set.capacity() * size_of::<AccSet>()
     }
 
-    fn freeze_to_rows(&self, idx: IdxSelection<'_>, array: &mut [Vec<u8>]) -> Result<()> {
-        AccCollectionColumn::freeze_to_rows(self, idx, array)
+    fn freeze_to_arrays(&mut self, idx: IdxSelection<'_>) -> Result<Vec<ArrayRef>> {
+        let mut array = vec![vec![]; idx.len()];
+        AccCollectionColumn::freeze_to_rows(self, idx, &mut array)?;
+        Ok(vec![Arc::new(BinaryArray::from_iter_values(array))])
     }
 
-    fn unfreeze_from_rows(&mut self, cursors: &mut [Cursor<&[u8]>]) -> Result<()> {
-        AccCollectionColumn::unfreeze_from_rows(self, cursors)
+    fn unfreeze_from_arrays(&mut self, arrays: &[ArrayRef]) -> Result<()> {
+        let array = downcast_any!(arrays[0], BinaryArray)?;
+        let mut cursors = vec![];
+
+        for i in 0..array.len() {
+            cursors.push(Cursor::new(array.value(i)));
+        }
+        AccCollectionColumn::unfreeze_from_rows(self, &mut cursors)
     }
 
-    fn spill(&self, idx: IdxSelection<'_>, w: &mut SpillCompressedWriter) -> Result<()> {
+    fn spill(&mut self, idx: IdxSelection<'_>, w: &mut SpillCompressedWriter) -> Result<()> {
         idx_for! {
             (idx in idx) => {
                 self.save_raw(idx, w)?;
@@ -404,15 +416,23 @@ impl AccColumn for AccListColumn {
         self.mem_used + self.list.capacity() * size_of::<AccList>()
     }
 
-    fn freeze_to_rows(&self, idx: IdxSelection<'_>, array: &mut [Vec<u8>]) -> Result<()> {
-        AccCollectionColumn::freeze_to_rows(self, idx, array)
+    fn freeze_to_arrays(&mut self, idx: IdxSelection<'_>) -> Result<Vec<ArrayRef>> {
+        let mut array = vec![vec![]; idx.len()];
+        AccCollectionColumn::freeze_to_rows(self, idx, &mut array)?;
+        Ok(vec![Arc::new(BinaryArray::from_iter_values(array))])
     }
 
-    fn unfreeze_from_rows(&mut self, cursors: &mut [Cursor<&[u8]>]) -> Result<()> {
-        AccCollectionColumn::unfreeze_from_rows(self, cursors)
+    fn unfreeze_from_arrays(&mut self, arrays: &[ArrayRef]) -> Result<()> {
+        let array = downcast_any!(arrays[0], BinaryArray)?;
+        let mut cursors = vec![];
+
+        for i in 0..array.len() {
+            cursors.push(Cursor::new(array.value(i)));
+        }
+        AccCollectionColumn::unfreeze_from_rows(self, &mut cursors)
     }
 
-    fn spill(&self, idx: IdxSelection<'_>, w: &mut SpillCompressedWriter) -> Result<()> {
+    fn spill(&mut self, idx: IdxSelection<'_>, w: &mut SpillCompressedWriter) -> Result<()> {
         idx_for! {
             (idx in idx) => {
                 self.save_raw(idx, w)?;
@@ -442,7 +462,7 @@ impl AccList {
     }
 
     pub fn append(&mut self, value: &ScalarValue, nullable: bool) {
-        write_scalar(&value, nullable, &mut self.raw).unwrap();
+        write_scalar(&value, nullable, &mut self.raw).expect("write scalar failed");
     }
 
     pub fn merge(&mut self, other: &mut Self) {
@@ -456,7 +476,9 @@ impl AccList {
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.0.position() < self.0.get_ref().len() as u64 {
-                    return Some(read_scalar(&mut self.0, &self.1, self.2).unwrap());
+                    return Some(
+                        read_scalar(&mut self.0, &self.1, self.2).expect("read scalar failed"),
+                    );
                 }
                 None
             }
@@ -534,7 +556,7 @@ impl AccSet {
 
     pub fn append(&mut self, value: &ScalarValue, nullable: bool) {
         let old_raw_len = self.list.raw.len();
-        write_scalar(value, nullable, &mut self.list.raw).unwrap();
+        write_scalar(value, nullable, &mut self.list.raw).expect("write scalar failed");
         self.append_raw_inline(old_raw_len);
     }
 
@@ -713,7 +735,7 @@ mod tests {
     }
 
     #[test]
-    fn test_acc_set_spill() {
+    fn test_acc_set_spill() -> Result<()> {
         let mut acc_col = AccSetColumn::empty(DataType::Int32);
         acc_col.resize(3);
         acc_col.append_item(1, &ScalarValue::Int32(Some(1)));
@@ -726,18 +748,15 @@ mod tests {
 
         let mut spill: Box<dyn Spill> = Box::new(vec![]);
         let mut spill_writer = spill.get_compressed_writer();
-        acc_col
-            .spill(IdxSelection::Range(0, 3), &mut spill_writer)
-            .unwrap();
-        spill_writer.finish().unwrap();
+        acc_col.spill(IdxSelection::Range(0, 3), &mut spill_writer)?;
+        spill_writer.finish()?;
 
         let mut acc_col_unspill = AccSetColumn::empty(DataType::Int32);
-        acc_col_unspill
-            .unspill(3, &mut spill.get_compressed_reader())
-            .unwrap();
+        acc_col_unspill.unspill(3, &mut spill.get_compressed_reader())?;
 
         assert_eq!(acc_col.take_values(0), acc_col_unspill.take_values(0));
         assert_eq!(acc_col.take_values(1), acc_col_unspill.take_values(1));
         assert_eq!(acc_col.take_values(2), acc_col_unspill.take_values(2));
+        Ok(())
     }
 }

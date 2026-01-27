@@ -157,7 +157,7 @@ impl fmt::Display for Partitioning {
                     .map(|e| format!("{e}"))
                     .collect::<Vec<String>>()
                     .join(", ");
-                write!(f, "Range([{phy_exprs_str}], {size}, {:?})", bounds)
+                write!(f, "Range([{phy_exprs_str}], {size}, {bounds:?})")
             }
         }
     }

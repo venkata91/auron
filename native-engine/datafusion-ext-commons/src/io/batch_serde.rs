@@ -48,7 +48,9 @@ impl TransposeOpt {
             DataType::Null => 0,
             DataType::Boolean => 0,
             dt if dt.primitive_width() == Some(1) => 0,
-            dt if dt.primitive_width() >= Some(2) => dt.primitive_width().unwrap(),
+            dt if dt.primitive_width() >= Some(2) => {
+                dt.primitive_width().expect("primitive_width must be Some")
+            }
             DataType::Utf8 | DataType::Binary => 4,
             DataType::List(f) | DataType::Map(f, _) => {
                 Self::data_type_bytes_width(f.data_type()).max(4)
@@ -93,7 +95,7 @@ pub fn read_batch(
     let cols = schema
         .fields()
         .into_iter()
-        .map(|field| read_array(&mut input, &field.data_type(), num_rows, &mut transpose_opt))
+        .map(|field| read_array(&mut input, field.data_type(), num_rows, &mut transpose_opt))
         .collect::<Result<_>>()?;
     Ok(Some((num_rows, cols)))
 }
@@ -194,7 +196,7 @@ fn write_bits_buffer<W: Write>(
     bits_len: usize,
     output: &mut W,
 ) -> Result<()> {
-    let mut out_buffer = vec![0u8; (bits_len + 7) / 8];
+    let mut out_buffer = vec![0u8; bits_len.div_ceil(8)];
     let in_ptr = buffer.as_ptr();
     let out_ptr = out_buffer.as_mut_ptr();
 
@@ -210,7 +212,7 @@ fn write_bits_buffer<W: Write>(
 }
 
 fn read_bits_buffer<R: Read>(input: &mut R, bits_len: usize) -> Result<Buffer> {
-    let buf = read_bytes_slice(input, (bits_len + 7) / 8)?;
+    let buf = read_bytes_slice(input, bits_len.div_ceil(8))?;
     Ok(Buffer::from_vec(buf.into()))
 }
 
@@ -273,7 +275,6 @@ fn write_primitive_array<W: Write, PT: ArrowPrimitiveType>(
     output: &mut W,
     transpose_opt: &mut TransposeOpt,
 ) -> Result<()> {
-    let offset = array.offset();
     let len = array.len();
     let array_data = array.to_data();
     if let Some(null_buffer) = array_data.nulls() {
@@ -293,14 +294,14 @@ fn write_primitive_array<W: Write, PT: ArrowPrimitiveType>(
         && byte_width > 1
     {
         transpose::transpose(
-            array_data.buffer::<PT::Native>(0)[offset..][..len].as_raw_bytes(),
+            array_data.buffer::<PT::Native>(0)[..len].as_raw_bytes(),
             buffer[..byte_width * array.len()].as_raw_bytes_mut(),
             byte_width,
             array.len(),
         );
         output.write_all(buffer[..byte_width * array.len()].as_ref())?;
     } else {
-        output.write_all(array_data.buffer::<PT::Native>(0)[offset..][..len].as_raw_bytes())?;
+        output.write_all(array_data.buffer::<PT::Native>(0)[..len].as_raw_bytes())?;
     }
     Ok(())
 }
@@ -390,7 +391,7 @@ fn read_list_array<R: Read>(
     };
 
     let offsets = read_offsets(input, num_rows, transpose_opt)?;
-    let values_len = offsets.last().cloned().unwrap() as usize;
+    let values_len = offsets.last().cloned().expect("offsets must be non-empty") as usize;
     let offsets_buffer: Buffer = Buffer::from_vec(offsets);
     let values = read_array(
         input,
@@ -431,8 +432,15 @@ fn write_map_array<W: Write>(
     let value_offsets = array.value_offsets();
     write_offsets(output, value_offsets, transpose_opt)?;
 
-    let first_offset = value_offsets.first().cloned().unwrap() as usize;
-    let entries_len = value_offsets.last().cloned().unwrap() as usize - first_offset;
+    let first_offset = value_offsets
+        .first()
+        .cloned()
+        .expect("value_offsets must be non-empty") as usize;
+    let entries_len = value_offsets
+        .last()
+        .cloned()
+        .expect("value_offsets must be non-empty") as usize
+        - first_offset;
     let keys = array.keys().slice(first_offset, entries_len);
     let values = array.values().slice(first_offset, entries_len);
 
@@ -458,7 +466,7 @@ fn read_map_array<R: Read>(
     };
 
     let offsets = read_offsets(input, num_rows, transpose_opt)?;
-    let entries_len = offsets.last().cloned().unwrap() as usize;
+    let entries_len = offsets.last().cloned().expect("offsets must be non-empty") as usize;
     let offsets_buffer = Buffer::from_vec(offsets);
 
     // build inner struct
@@ -612,8 +620,14 @@ fn write_bytes_array<T: ByteArrayType<Offset = i32>, W: Write>(
     let value_offsets = array.value_offsets();
     write_offsets(output, value_offsets, transpose_opt)?;
 
-    let first_offset = value_offsets.first().cloned().unwrap() as usize;
-    let last_offset = value_offsets.last().cloned().unwrap() as usize;
+    let first_offset = value_offsets
+        .first()
+        .cloned()
+        .expect("value_offsets must be non-empty") as usize;
+    let last_offset = value_offsets
+        .last()
+        .cloned()
+        .expect("value_offsets must be non-empty") as usize;
     output.write_all(&array.value_data()[first_offset..last_offset])?;
     Ok(())
 }
@@ -632,7 +646,7 @@ fn read_bytes_array<R: Read>(
     };
 
     let offsets = read_offsets(input, num_rows, transpose_opt)?;
-    let values_len = offsets.last().cloned().unwrap() as usize;
+    let values_len = offsets.last().cloned().expect("offsets must be non-empty") as usize;
     let offsets_buffer = Buffer::from_vec(offsets);
 
     let data_buffer = Buffer::from_vec(read_bytes_slice(input, values_len)?.into());
@@ -652,7 +666,7 @@ mod test {
     use std::{io::Cursor, sync::Arc};
 
     use arrow::{array::*, datatypes::*, record_batch::RecordBatch};
-    use datafusion::assert_batches_eq;
+    use datafusion::{assert_batches_eq, common::Result};
 
     use crate::io::{
         batch_serde::{read_batch, write_batch},
@@ -660,7 +674,7 @@ mod test {
     };
 
     #[test]
-    fn test_write_and_read_batch() {
+    fn test_write_and_read_batch() -> Result<()> {
         let array1: ArrayRef = Arc::new(StringArray::from_iter([
             Some("20220101".to_owned()),
             Some("20220102你好🍹".to_owned()),
@@ -683,35 +697,35 @@ mod test {
             ("str", array1, true),
             ("u64", array2, true),
             ("bool", array3, true),
-        ])
-        .unwrap();
+        ])?;
 
         // test read after write
         let mut buf = vec![];
-        write_batch(batch.num_rows(), batch.columns(), &mut buf).unwrap();
+        write_batch(batch.num_rows(), batch.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema())?,
             batch
         );
 
         // test read after write sliced
         let sliced = batch.slice(1, 2);
         let mut buf = vec![];
-        write_batch(sliced.num_rows(), sliced.columns(), &mut buf).unwrap();
+        write_batch(sliced.num_rows(), sliced.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema())?,
             sliced
         );
+        Ok(())
     }
 
     #[test]
-    fn test_write_and_read_batch_for_list() {
+    fn test_write_and_read_batch_for_list() -> Result<()> {
         let data = vec![
             Some(vec![Some(0), Some(1), Some(2)]),
             None,
@@ -723,11 +737,10 @@ mod test {
         let batch = RecordBatch::try_from_iter_with_nullable(vec![
             ("list1", list_array.clone(), true),
             ("list2", list_array.clone(), true),
-        ])
-        .unwrap();
+        ])?;
 
         assert_batches_eq!(
-            vec![
+            [
                 "+-----------+-----------+",
                 "| list1     | list2     |",
                 "+-----------+-----------+",
@@ -735,19 +748,19 @@ mod test {
                 "|           |           |",
                 "| [3, , 5]  | [3, , 5]  |",
                 "| [6, 7]    | [6, 7]    |",
-                "+-----------+-----------+",
+                "+-----------+-----------+"
             ],
             &[batch.clone()]
         );
 
         // test read after write
         let mut buf = vec![];
-        write_batch(batch.num_rows(), batch.columns(), &mut buf).unwrap();
+        write_batch(batch.num_rows(), batch.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_batches_eq!(
-            vec![
+            [
                 "+-----------+-----------+",
                 "| list1     | list2     |",
                 "+-----------+-----------+",
@@ -755,118 +768,127 @@ mod test {
                 "|           |           |",
                 "| [3, , 5]  | [3, , 5]  |",
                 "| [6, 7]    | [6, 7]    |",
-                "+-----------+-----------+",
+                "+-----------+-----------+"
             ],
-            &[recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap()]
+            &[recover_named_batch(
+                decoded_num_rows,
+                &decoded_cols,
+                batch.schema()
+            )?]
         );
 
         // test read after write sliced
         let sliced = batch.slice(1, 2);
         let mut buf = vec![];
-        write_batch(sliced.num_rows(), sliced.columns(), &mut buf).unwrap();
+        write_batch(sliced.num_rows(), sliced.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_batches_eq!(
-            vec![
+            [
                 "+----------+----------+",
                 "| list1    | list2    |",
                 "+----------+----------+",
                 "|          |          |",
                 "| [3, , 5] | [3, , 5] |",
-                "+----------+----------+",
+                "+----------+----------+"
             ],
-            &[recover_named_batch(decoded_num_rows, &decoded_cols, sliced.schema()).unwrap()]
+            &[recover_named_batch(
+                decoded_num_rows,
+                &decoded_cols,
+                sliced.schema()
+            )?]
         );
+        Ok(())
     }
 
     #[test]
-    fn test_write_and_read_batch_for_map() {
-        let map_array: ArrayRef = Arc::new(
-            MapArray::new_from_strings(
-                ["00", "11", "22", "33", "44", "55", "66", "77"].into_iter(),
-                &StringArray::from(vec![
-                    Some("aa"),
-                    None,
-                    Some("cc"),
-                    Some("dd"),
-                    Some("ee"),
-                    Some("ff"),
-                    Some("gg"),
-                    Some("hh"),
-                ]),
-                &[0, 3, 6, 8], // [00,11,22], [33,44,55], [66,77]
-            )
-            .unwrap(),
-        );
+    fn test_write_and_read_batch_for_map() -> Result<()> {
+        let map_array: ArrayRef = Arc::new(MapArray::new_from_strings(
+            ["00", "11", "22", "33", "44", "55", "66", "77"].into_iter(),
+            &StringArray::from(vec![
+                Some("aa"),
+                None,
+                Some("cc"),
+                Some("dd"),
+                Some("ee"),
+                Some("ff"),
+                Some("gg"),
+                Some("hh"),
+            ]),
+            &[0, 3, 6, 8], // [00,11,22], [33,44,55], [66,77]
+        )?);
 
         let batch = RecordBatch::try_from_iter_with_nullable(vec![
             ("map1", map_array.clone(), true),
             ("map2", map_array.clone(), true),
-        ])
-        .unwrap();
+        ])?;
 
         // test read after write
         let mut buf = vec![];
-        write_batch(batch.num_rows(), batch.columns(), &mut buf).unwrap();
+        write_batch(batch.num_rows(), batch.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema())?,
             batch
         );
 
         // test read after write sliced
         let sliced = batch.slice(1, 2);
         let mut buf = vec![];
-        write_batch(sliced.num_rows(), sliced.columns(), &mut buf).unwrap();
+        write_batch(sliced.num_rows(), sliced.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, sliced.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, sliced.schema())?,
             sliced
         );
+        Ok(())
     }
 
     #[test]
-    fn test_write_and_read_batch_for_struct() {
+    fn test_write_and_read_batch_for_struct() -> Result<()> {
         let c1: ArrayRef = Arc::new(BooleanArray::from(vec![false, false, true, true]));
         let c2: ArrayRef = Arc::new(Int32Array::from(vec![42, 28, 19, 31]));
         let c3: ArrayRef = Arc::new(BooleanArray::from(vec![None, None, None, Some(true)]));
         let c4: ArrayRef = Arc::new(Int32Array::from(vec![None, None, None, Some(31)]));
-        let struct_array: ArrayRef = Arc::new(
-            StructArray::try_from(vec![("c1", c1), ("c2", c2), ("c3", c3), ("c4", c4)]).unwrap(),
-        );
+        let struct_array: ArrayRef = Arc::new(StructArray::try_from(vec![
+            ("c1", c1),
+            ("c2", c2),
+            ("c3", c3),
+            ("c4", c4),
+        ])?);
 
         let batch = RecordBatch::try_from_iter_with_nullable(vec![
             ("struct1", struct_array.clone(), true),
             ("struct2", struct_array.clone(), true),
-        ])
-        .unwrap();
+        ])?;
 
         // test read after write
         let mut buf = vec![];
-        write_batch(batch.num_rows(), batch.columns(), &mut buf).unwrap();
+        write_batch(batch.num_rows(), batch.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema())?,
             batch
         );
 
         // test read after write sliced
         let sliced = batch.slice(1, 2);
         let mut buf = vec![];
-        write_batch(sliced.num_rows(), sliced.columns(), &mut buf).unwrap();
+        write_batch(sliced.num_rows(), sliced.columns(), &mut buf)?;
         let mut cursor = Cursor::new(buf);
         let (decoded_num_rows, decoded_cols) =
-            read_batch(&mut cursor, &batch.schema()).unwrap().unwrap();
+            read_batch(&mut cursor, &batch.schema())?.expect("non-empty batch");
         assert_eq!(
-            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema()).unwrap(),
+            recover_named_batch(decoded_num_rows, &decoded_cols, batch.schema())?,
             sliced
         );
+        Ok(())
     }
 }

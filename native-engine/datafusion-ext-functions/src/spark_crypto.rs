@@ -99,7 +99,7 @@ fn hex_encode<T: AsRef<[u8]>>(data: T) -> String {
     let mut s = String::with_capacity(data.as_ref().len() * 2);
     for b in data.as_ref() {
         // Writing to a string never errors, so we can unwrap here.
-        write!(&mut s, "{b:02x}").unwrap();
+        write!(&mut s, "{b:02x}").expect("writing to String should not fail");
     }
     s
 }
@@ -116,6 +116,7 @@ mod tests {
 
     /// Helper function to run a test for a given hash function and scalar
     /// input.
+    #[allow(clippy::panic)]
     fn run_scalar_test(
         // Accepts any function that matches the signature of the spark_sha* functions.
         hash_fn: impl Fn(&[ColumnarValue]) -> DataFusionResult<ColumnarValue>,

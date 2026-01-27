@@ -1,0 +1,664 @@
+== Physical Plan ==
+AdaptiveSparkPlan (8)
++- == Final Plan ==
+   NativeProject (4)
+   +- NativeFilter (3)
+      +- InputAdapter (2)
+         +- NativeParquetScan  (1)
++- == Initial Plan ==
+   Project (7)
+   +- Filter (6)
+      +- Scan parquet (5)
+
+
+(5) Scan parquet
+Output [1]: [r_reason_sk#1]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(r_reason_sk), EqualTo(r_reason_sk,1)]
+ReadSchema: struct<r_reason_sk:int>
+
+(2) InputAdapter
+Input [1]: [r_reason_sk#1]
+Arguments: [#1]
+
+(3) NativeFilter
+Input [1]: [#1#1]
+Condition : (isnotnull(r_reason_sk#1) AND (r_reason_sk#1 = 1))
+
+(4) NativeProject
+Output [5]: [CASE WHEN (Subquery subquery#2, [id=#3].count(1) > 62316685) THEN ReusedSubquery Subquery subquery#2, [id=#3].avg(ss_ext_discount_amt) ELSE ReusedSubquery Subquery subquery#2, [id=#3].avg(ss_net_paid) END AS bucket1#4, CASE WHEN (Subquery subquery#5, [id=#6].count(1) > 19045798) THEN ReusedSubquery Subquery subquery#5, [id=#6].avg(ss_ext_discount_amt) ELSE ReusedSubquery Subquery subquery#5, [id=#6].avg(ss_net_paid) END AS bucket2#7, CASE WHEN (Subquery subquery#8, [id=#9].count(1) > 365541424) THEN ReusedSubquery Subquery subquery#8, [id=#9].avg(ss_ext_discount_amt) ELSE ReusedSubquery Subquery subquery#8, [id=#9].avg(ss_net_paid) END AS bucket3#10, CASE WHEN (Subquery subquery#11, [id=#12].count(1) > 216357808) THEN ReusedSubquery Subquery subquery#11, [id=#12].avg(ss_ext_discount_amt) ELSE ReusedSubquery Subquery subquery#11, [id=#12].avg(ss_net_paid) END AS bucket4#13, CASE WHEN (Subquery subquery#14, [id=#15].count(1) > 184483884) THEN ReusedSubquery Subquery subquery#14, [id=#15].avg(ss_ext_discount_amt) ELSE ReusedSubquery Subquery subquery#14, [id=#15].avg(ss_net_paid) END AS bucket5#16]
+Input [1]: [#1#1]
+
+(5) Scan parquet
+Output [1]: [r_reason_sk#1]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(r_reason_sk), EqualTo(r_reason_sk,1)]
+ReadSchema: struct<r_reason_sk:int>
+
+(6) Filter
+Input [1]: [r_reason_sk#1]
+Condition : (isnotnull(r_reason_sk#1) AND (r_reason_sk#1 = 1))
+
+(7) Project
+Output [5]: [CASE WHEN (Subquery subquery#2, [id=#3].count(1) > 62316685) THEN Subquery subquery#17, [id=#18].avg(ss_ext_discount_amt) ELSE Subquery subquery#19, [id=#20].avg(ss_net_paid) END AS bucket1#4, CASE WHEN (Subquery subquery#5, [id=#6].count(1) > 19045798) THEN Subquery subquery#21, [id=#22].avg(ss_ext_discount_amt) ELSE Subquery subquery#23, [id=#24].avg(ss_net_paid) END AS bucket2#7, CASE WHEN (Subquery subquery#8, [id=#9].count(1) > 365541424) THEN Subquery subquery#25, [id=#26].avg(ss_ext_discount_amt) ELSE Subquery subquery#27, [id=#28].avg(ss_net_paid) END AS bucket3#10, CASE WHEN (Subquery subquery#11, [id=#12].count(1) > 216357808) THEN Subquery subquery#29, [id=#30].avg(ss_ext_discount_amt) ELSE Subquery subquery#31, [id=#32].avg(ss_net_paid) END AS bucket4#13, CASE WHEN (Subquery subquery#14, [id=#15].count(1) > 184483884) THEN Subquery subquery#33, [id=#34].avg(ss_ext_discount_amt) ELSE Subquery subquery#35, [id=#36].avg(ss_net_paid) END AS bucket5#16]
+Input [1]: [r_reason_sk#1]
+
+(8) AdaptiveSparkPlan
+Output [5]: [bucket1#4, bucket2#7, bucket3#10, bucket4#13, bucket5#16]
+Arguments: isFinalPlan=true
+
+===== Subqueries =====
+
+Subquery:1 Hosting operator id = 4 Hosting Expression = Subquery subquery#2, [id=#3]
+AdaptiveSparkPlan (27)
++- == Final Plan ==
+   NativeProject (19)
+   +- NativeProject (18)
+      +- NativeHashAggregate (17)
+         +- ShuffleQueryStage (16), Statistics(X)
+            +- NativeShuffleExchange (15)
+               +- NativeHashAggregate (14)
+                  +- NativeProject (13)
+                     +- NativeProject (12)
+                        +- NativeFilter (11)
+                           +- InputAdapter (10)
+                              +- NativeParquetScan  (9)
++- == Initial Plan ==
+   Project (26)
+   +- HashAggregate (25)
+      +- Exchange (24)
+         +- HashAggregate (23)
+            +- Project (22)
+               +- Filter (21)
+                  +- Scan parquet (20)
+
+
+(20) Scan parquet
+Output [3]: [ss_quantity#37, ss_ext_discount_amt#38, ss_net_paid#39]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,1), LessThanOrEqual(ss_quantity,20)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(10) InputAdapter
+Input [3]: [ss_quantity#37, ss_ext_discount_amt#38, ss_net_paid#39]
+Arguments: [#37, #38, #39]
+
+(11) NativeFilter
+Input [3]: [#37#37, #38#38, #39#39]
+Condition : ((isnotnull(ss_quantity#37) AND (ss_quantity#37 >= 1)) AND (ss_quantity#37 <= 20))
+
+(12) NativeProject
+Output [2]: [ss_ext_discount_amt#38, ss_net_paid#39]
+Input [3]: [#37#37, #38#38, #39#39]
+
+(13) NativeProject
+Output [2]: [UnscaledValue(ss_ext_discount_amt#38) AS _c0#40, UnscaledValue(ss_net_paid#39) AS _c1#41]
+Input [2]: [ss_ext_discount_amt#38, ss_net_paid#39]
+
+(14) NativeHashAggregate
+Input [2]: [_c0#40, _c1#41]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(_c0#40), partial_avg(_c1#41)]
+Aggregate Attributes [5]: [count#42, sum#43, count#44, sum#45, count#46]
+Results [5]: [#47, #48, #47, #48, #47]
+
+(15) NativeShuffleExchange
+Input [5]: [#47, #48, #47, #48, #47]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=1]
+
+(16) ShuffleQueryStage
+Output [5]: [#47, #48, #47, #48, #47]
+Arguments: X
+
+(17) NativeHashAggregate
+Input [5]: [#47, #48, #47, #48, #47]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#38)), avg(UnscaledValue(ss_net_paid#39))]
+Aggregate Attributes [3]: [count(1)#49, avg(UnscaledValue(ss_ext_discount_amt#38))#50, avg(UnscaledValue(ss_net_paid#39))#51]
+Results [3]: [count(1)#49, avg(UnscaledValue(ss_ext_discount_amt#38))#50, avg(UnscaledValue(ss_net_paid#39))#51]
+
+(18) NativeProject
+Output [3]: [count(1)#49 AS count(1)#52, cast((avg(UnscaledValue(ss_ext_discount_amt#38))#50 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#53, cast((avg(UnscaledValue(ss_net_paid#39))#51 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#54]
+Input [3]: [count(1)#49, avg(UnscaledValue(ss_ext_discount_amt#38))#50, avg(UnscaledValue(ss_net_paid#39))#51]
+
+(19) NativeProject
+Output [1]: [named_struct(count(1), count(1)#52, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#53, avg(ss_net_paid), avg(ss_net_paid)#54) AS mergedValue#55]
+Input [3]: [count(1)#52, avg(ss_ext_discount_amt)#53, avg(ss_net_paid)#54]
+
+(20) Scan parquet
+Output [3]: [ss_quantity#37, ss_ext_discount_amt#38, ss_net_paid#39]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,1), LessThanOrEqual(ss_quantity,20)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(21) Filter
+Input [3]: [ss_quantity#37, ss_ext_discount_amt#38, ss_net_paid#39]
+Condition : ((isnotnull(ss_quantity#37) AND (ss_quantity#37 >= 1)) AND (ss_quantity#37 <= 20))
+
+(22) Project
+Output [2]: [ss_ext_discount_amt#38, ss_net_paid#39]
+Input [3]: [ss_quantity#37, ss_ext_discount_amt#38, ss_net_paid#39]
+
+(23) HashAggregate
+Input [2]: [ss_ext_discount_amt#38, ss_net_paid#39]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(UnscaledValue(ss_ext_discount_amt#38)), partial_avg(UnscaledValue(ss_net_paid#39))]
+Aggregate Attributes [5]: [count#42, sum#43, count#44, sum#45, count#46]
+Results [5]: [count#56, sum#57, count#58, sum#59, count#60]
+
+(24) Exchange
+Input [5]: [count#56, sum#57, count#58, sum#59, count#60]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=2]
+
+(25) HashAggregate
+Input [5]: [count#56, sum#57, count#58, sum#59, count#60]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#38)), avg(UnscaledValue(ss_net_paid#39))]
+Aggregate Attributes [3]: [count(1)#49, avg(UnscaledValue(ss_ext_discount_amt#38))#50, avg(UnscaledValue(ss_net_paid#39))#51]
+Results [3]: [count(1)#49 AS count(1)#52, cast((avg(UnscaledValue(ss_ext_discount_amt#38))#50 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#53, cast((avg(UnscaledValue(ss_net_paid#39))#51 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#54]
+
+(26) Project
+Output [1]: [named_struct(count(1), count(1)#52, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#53, avg(ss_net_paid), avg(ss_net_paid)#54) AS mergedValue#55]
+Input [3]: [count(1)#52, avg(ss_ext_discount_amt)#53, avg(ss_net_paid)#54]
+
+(27) AdaptiveSparkPlan
+Output [1]: [mergedValue#55]
+Arguments: isFinalPlan=true
+
+Subquery:2 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#2, [id=#3]
+
+Subquery:3 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#2, [id=#3]
+
+Subquery:4 Hosting operator id = 4 Hosting Expression = Subquery subquery#5, [id=#6]
+AdaptiveSparkPlan (46)
++- == Final Plan ==
+   NativeProject (38)
+   +- NativeProject (37)
+      +- NativeHashAggregate (36)
+         +- ShuffleQueryStage (35), Statistics(X)
+            +- NativeShuffleExchange (34)
+               +- NativeHashAggregate (33)
+                  +- NativeProject (32)
+                     +- NativeProject (31)
+                        +- NativeFilter (30)
+                           +- InputAdapter (29)
+                              +- NativeParquetScan  (28)
++- == Initial Plan ==
+   Project (45)
+   +- HashAggregate (44)
+      +- Exchange (43)
+         +- HashAggregate (42)
+            +- Project (41)
+               +- Filter (40)
+                  +- Scan parquet (39)
+
+
+(39) Scan parquet
+Output [3]: [ss_quantity#61, ss_ext_discount_amt#62, ss_net_paid#63]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,21), LessThanOrEqual(ss_quantity,40)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(29) InputAdapter
+Input [3]: [ss_quantity#61, ss_ext_discount_amt#62, ss_net_paid#63]
+Arguments: [#61, #62, #63]
+
+(30) NativeFilter
+Input [3]: [#61#61, #62#62, #63#63]
+Condition : ((isnotnull(ss_quantity#61) AND (ss_quantity#61 >= 21)) AND (ss_quantity#61 <= 40))
+
+(31) NativeProject
+Output [2]: [ss_ext_discount_amt#62, ss_net_paid#63]
+Input [3]: [#61#61, #62#62, #63#63]
+
+(32) NativeProject
+Output [2]: [UnscaledValue(ss_ext_discount_amt#62) AS _c0#64, UnscaledValue(ss_net_paid#63) AS _c1#65]
+Input [2]: [ss_ext_discount_amt#62, ss_net_paid#63]
+
+(33) NativeHashAggregate
+Input [2]: [_c0#64, _c1#65]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(_c0#64), partial_avg(_c1#65)]
+Aggregate Attributes [5]: [count#66, sum#67, count#68, sum#69, count#70]
+Results [5]: [#47, #48, #47, #48, #47]
+
+(34) NativeShuffleExchange
+Input [5]: [#47, #48, #47, #48, #47]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=3]
+
+(35) ShuffleQueryStage
+Output [5]: [#47, #48, #47, #48, #47]
+Arguments: X
+
+(36) NativeHashAggregate
+Input [5]: [#47, #48, #47, #48, #47]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#62)), avg(UnscaledValue(ss_net_paid#63))]
+Aggregate Attributes [3]: [count(1)#71, avg(UnscaledValue(ss_ext_discount_amt#62))#72, avg(UnscaledValue(ss_net_paid#63))#73]
+Results [3]: [count(1)#71, avg(UnscaledValue(ss_ext_discount_amt#62))#72, avg(UnscaledValue(ss_net_paid#63))#73]
+
+(37) NativeProject
+Output [3]: [count(1)#71 AS count(1)#74, cast((avg(UnscaledValue(ss_ext_discount_amt#62))#72 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#75, cast((avg(UnscaledValue(ss_net_paid#63))#73 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#76]
+Input [3]: [count(1)#71, avg(UnscaledValue(ss_ext_discount_amt#62))#72, avg(UnscaledValue(ss_net_paid#63))#73]
+
+(38) NativeProject
+Output [1]: [named_struct(count(1), count(1)#74, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#75, avg(ss_net_paid), avg(ss_net_paid)#76) AS mergedValue#77]
+Input [3]: [count(1)#74, avg(ss_ext_discount_amt)#75, avg(ss_net_paid)#76]
+
+(39) Scan parquet
+Output [3]: [ss_quantity#61, ss_ext_discount_amt#62, ss_net_paid#63]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,21), LessThanOrEqual(ss_quantity,40)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(40) Filter
+Input [3]: [ss_quantity#61, ss_ext_discount_amt#62, ss_net_paid#63]
+Condition : ((isnotnull(ss_quantity#61) AND (ss_quantity#61 >= 21)) AND (ss_quantity#61 <= 40))
+
+(41) Project
+Output [2]: [ss_ext_discount_amt#62, ss_net_paid#63]
+Input [3]: [ss_quantity#61, ss_ext_discount_amt#62, ss_net_paid#63]
+
+(42) HashAggregate
+Input [2]: [ss_ext_discount_amt#62, ss_net_paid#63]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(UnscaledValue(ss_ext_discount_amt#62)), partial_avg(UnscaledValue(ss_net_paid#63))]
+Aggregate Attributes [5]: [count#66, sum#67, count#68, sum#69, count#70]
+Results [5]: [count#78, sum#79, count#80, sum#81, count#82]
+
+(43) Exchange
+Input [5]: [count#78, sum#79, count#80, sum#81, count#82]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=4]
+
+(44) HashAggregate
+Input [5]: [count#78, sum#79, count#80, sum#81, count#82]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#62)), avg(UnscaledValue(ss_net_paid#63))]
+Aggregate Attributes [3]: [count(1)#71, avg(UnscaledValue(ss_ext_discount_amt#62))#72, avg(UnscaledValue(ss_net_paid#63))#73]
+Results [3]: [count(1)#71 AS count(1)#74, cast((avg(UnscaledValue(ss_ext_discount_amt#62))#72 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#75, cast((avg(UnscaledValue(ss_net_paid#63))#73 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#76]
+
+(45) Project
+Output [1]: [named_struct(count(1), count(1)#74, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#75, avg(ss_net_paid), avg(ss_net_paid)#76) AS mergedValue#77]
+Input [3]: [count(1)#74, avg(ss_ext_discount_amt)#75, avg(ss_net_paid)#76]
+
+(46) AdaptiveSparkPlan
+Output [1]: [mergedValue#77]
+Arguments: isFinalPlan=true
+
+Subquery:5 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#5, [id=#6]
+
+Subquery:6 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#5, [id=#6]
+
+Subquery:7 Hosting operator id = 4 Hosting Expression = Subquery subquery#8, [id=#9]
+AdaptiveSparkPlan (65)
++- == Final Plan ==
+   NativeProject (57)
+   +- NativeProject (56)
+      +- NativeHashAggregate (55)
+         +- ShuffleQueryStage (54), Statistics(X)
+            +- NativeShuffleExchange (53)
+               +- NativeHashAggregate (52)
+                  +- NativeProject (51)
+                     +- NativeProject (50)
+                        +- NativeFilter (49)
+                           +- InputAdapter (48)
+                              +- NativeParquetScan  (47)
++- == Initial Plan ==
+   Project (64)
+   +- HashAggregate (63)
+      +- Exchange (62)
+         +- HashAggregate (61)
+            +- Project (60)
+               +- Filter (59)
+                  +- Scan parquet (58)
+
+
+(58) Scan parquet
+Output [3]: [ss_quantity#83, ss_ext_discount_amt#84, ss_net_paid#85]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,41), LessThanOrEqual(ss_quantity,60)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(48) InputAdapter
+Input [3]: [ss_quantity#83, ss_ext_discount_amt#84, ss_net_paid#85]
+Arguments: [#83, #84, #85]
+
+(49) NativeFilter
+Input [3]: [#83#83, #84#84, #85#85]
+Condition : ((isnotnull(ss_quantity#83) AND (ss_quantity#83 >= 41)) AND (ss_quantity#83 <= 60))
+
+(50) NativeProject
+Output [2]: [ss_ext_discount_amt#84, ss_net_paid#85]
+Input [3]: [#83#83, #84#84, #85#85]
+
+(51) NativeProject
+Output [2]: [UnscaledValue(ss_ext_discount_amt#84) AS _c0#86, UnscaledValue(ss_net_paid#85) AS _c1#87]
+Input [2]: [ss_ext_discount_amt#84, ss_net_paid#85]
+
+(52) NativeHashAggregate
+Input [2]: [_c0#86, _c1#87]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(_c0#86), partial_avg(_c1#87)]
+Aggregate Attributes [5]: [count#88, sum#89, count#90, sum#91, count#92]
+Results [5]: [#47, #48, #47, #48, #47]
+
+(53) NativeShuffleExchange
+Input [5]: [#47, #48, #47, #48, #47]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=5]
+
+(54) ShuffleQueryStage
+Output [5]: [#47, #48, #47, #48, #47]
+Arguments: X
+
+(55) NativeHashAggregate
+Input [5]: [#47, #48, #47, #48, #47]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#84)), avg(UnscaledValue(ss_net_paid#85))]
+Aggregate Attributes [3]: [count(1)#93, avg(UnscaledValue(ss_ext_discount_amt#84))#94, avg(UnscaledValue(ss_net_paid#85))#95]
+Results [3]: [count(1)#93, avg(UnscaledValue(ss_ext_discount_amt#84))#94, avg(UnscaledValue(ss_net_paid#85))#95]
+
+(56) NativeProject
+Output [3]: [count(1)#93 AS count(1)#96, cast((avg(UnscaledValue(ss_ext_discount_amt#84))#94 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#97, cast((avg(UnscaledValue(ss_net_paid#85))#95 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#98]
+Input [3]: [count(1)#93, avg(UnscaledValue(ss_ext_discount_amt#84))#94, avg(UnscaledValue(ss_net_paid#85))#95]
+
+(57) NativeProject
+Output [1]: [named_struct(count(1), count(1)#96, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#97, avg(ss_net_paid), avg(ss_net_paid)#98) AS mergedValue#99]
+Input [3]: [count(1)#96, avg(ss_ext_discount_amt)#97, avg(ss_net_paid)#98]
+
+(58) Scan parquet
+Output [3]: [ss_quantity#83, ss_ext_discount_amt#84, ss_net_paid#85]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,41), LessThanOrEqual(ss_quantity,60)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(59) Filter
+Input [3]: [ss_quantity#83, ss_ext_discount_amt#84, ss_net_paid#85]
+Condition : ((isnotnull(ss_quantity#83) AND (ss_quantity#83 >= 41)) AND (ss_quantity#83 <= 60))
+
+(60) Project
+Output [2]: [ss_ext_discount_amt#84, ss_net_paid#85]
+Input [3]: [ss_quantity#83, ss_ext_discount_amt#84, ss_net_paid#85]
+
+(61) HashAggregate
+Input [2]: [ss_ext_discount_amt#84, ss_net_paid#85]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(UnscaledValue(ss_ext_discount_amt#84)), partial_avg(UnscaledValue(ss_net_paid#85))]
+Aggregate Attributes [5]: [count#88, sum#89, count#90, sum#91, count#92]
+Results [5]: [count#100, sum#101, count#102, sum#103, count#104]
+
+(62) Exchange
+Input [5]: [count#100, sum#101, count#102, sum#103, count#104]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=6]
+
+(63) HashAggregate
+Input [5]: [count#100, sum#101, count#102, sum#103, count#104]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#84)), avg(UnscaledValue(ss_net_paid#85))]
+Aggregate Attributes [3]: [count(1)#93, avg(UnscaledValue(ss_ext_discount_amt#84))#94, avg(UnscaledValue(ss_net_paid#85))#95]
+Results [3]: [count(1)#93 AS count(1)#96, cast((avg(UnscaledValue(ss_ext_discount_amt#84))#94 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#97, cast((avg(UnscaledValue(ss_net_paid#85))#95 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#98]
+
+(64) Project
+Output [1]: [named_struct(count(1), count(1)#96, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#97, avg(ss_net_paid), avg(ss_net_paid)#98) AS mergedValue#99]
+Input [3]: [count(1)#96, avg(ss_ext_discount_amt)#97, avg(ss_net_paid)#98]
+
+(65) AdaptiveSparkPlan
+Output [1]: [mergedValue#99]
+Arguments: isFinalPlan=true
+
+Subquery:8 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#8, [id=#9]
+
+Subquery:9 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#8, [id=#9]
+
+Subquery:10 Hosting operator id = 4 Hosting Expression = Subquery subquery#11, [id=#12]
+AdaptiveSparkPlan (84)
++- == Final Plan ==
+   NativeProject (76)
+   +- NativeProject (75)
+      +- NativeHashAggregate (74)
+         +- ShuffleQueryStage (73), Statistics(X)
+            +- NativeShuffleExchange (72)
+               +- NativeHashAggregate (71)
+                  +- NativeProject (70)
+                     +- NativeProject (69)
+                        +- NativeFilter (68)
+                           +- InputAdapter (67)
+                              +- NativeParquetScan  (66)
++- == Initial Plan ==
+   Project (83)
+   +- HashAggregate (82)
+      +- Exchange (81)
+         +- HashAggregate (80)
+            +- Project (79)
+               +- Filter (78)
+                  +- Scan parquet (77)
+
+
+(77) Scan parquet
+Output [3]: [ss_quantity#105, ss_ext_discount_amt#106, ss_net_paid#107]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,61), LessThanOrEqual(ss_quantity,80)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(67) InputAdapter
+Input [3]: [ss_quantity#105, ss_ext_discount_amt#106, ss_net_paid#107]
+Arguments: [#105, #106, #107]
+
+(68) NativeFilter
+Input [3]: [#105#105, #106#106, #107#107]
+Condition : ((isnotnull(ss_quantity#105) AND (ss_quantity#105 >= 61)) AND (ss_quantity#105 <= 80))
+
+(69) NativeProject
+Output [2]: [ss_ext_discount_amt#106, ss_net_paid#107]
+Input [3]: [#105#105, #106#106, #107#107]
+
+(70) NativeProject
+Output [2]: [UnscaledValue(ss_ext_discount_amt#106) AS _c0#108, UnscaledValue(ss_net_paid#107) AS _c1#109]
+Input [2]: [ss_ext_discount_amt#106, ss_net_paid#107]
+
+(71) NativeHashAggregate
+Input [2]: [_c0#108, _c1#109]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(_c0#108), partial_avg(_c1#109)]
+Aggregate Attributes [5]: [count#110, sum#111, count#112, sum#113, count#114]
+Results [5]: [#47, #48, #47, #48, #47]
+
+(72) NativeShuffleExchange
+Input [5]: [#47, #48, #47, #48, #47]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=7]
+
+(73) ShuffleQueryStage
+Output [5]: [#47, #48, #47, #48, #47]
+Arguments: X
+
+(74) NativeHashAggregate
+Input [5]: [#47, #48, #47, #48, #47]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#106)), avg(UnscaledValue(ss_net_paid#107))]
+Aggregate Attributes [3]: [count(1)#115, avg(UnscaledValue(ss_ext_discount_amt#106))#116, avg(UnscaledValue(ss_net_paid#107))#117]
+Results [3]: [count(1)#115, avg(UnscaledValue(ss_ext_discount_amt#106))#116, avg(UnscaledValue(ss_net_paid#107))#117]
+
+(75) NativeProject
+Output [3]: [count(1)#115 AS count(1)#118, cast((avg(UnscaledValue(ss_ext_discount_amt#106))#116 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#119, cast((avg(UnscaledValue(ss_net_paid#107))#117 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#120]
+Input [3]: [count(1)#115, avg(UnscaledValue(ss_ext_discount_amt#106))#116, avg(UnscaledValue(ss_net_paid#107))#117]
+
+(76) NativeProject
+Output [1]: [named_struct(count(1), count(1)#118, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#119, avg(ss_net_paid), avg(ss_net_paid)#120) AS mergedValue#121]
+Input [3]: [count(1)#118, avg(ss_ext_discount_amt)#119, avg(ss_net_paid)#120]
+
+(77) Scan parquet
+Output [3]: [ss_quantity#105, ss_ext_discount_amt#106, ss_net_paid#107]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,61), LessThanOrEqual(ss_quantity,80)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(78) Filter
+Input [3]: [ss_quantity#105, ss_ext_discount_amt#106, ss_net_paid#107]
+Condition : ((isnotnull(ss_quantity#105) AND (ss_quantity#105 >= 61)) AND (ss_quantity#105 <= 80))
+
+(79) Project
+Output [2]: [ss_ext_discount_amt#106, ss_net_paid#107]
+Input [3]: [ss_quantity#105, ss_ext_discount_amt#106, ss_net_paid#107]
+
+(80) HashAggregate
+Input [2]: [ss_ext_discount_amt#106, ss_net_paid#107]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(UnscaledValue(ss_ext_discount_amt#106)), partial_avg(UnscaledValue(ss_net_paid#107))]
+Aggregate Attributes [5]: [count#110, sum#111, count#112, sum#113, count#114]
+Results [5]: [count#122, sum#123, count#124, sum#125, count#126]
+
+(81) Exchange
+Input [5]: [count#122, sum#123, count#124, sum#125, count#126]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=8]
+
+(82) HashAggregate
+Input [5]: [count#122, sum#123, count#124, sum#125, count#126]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#106)), avg(UnscaledValue(ss_net_paid#107))]
+Aggregate Attributes [3]: [count(1)#115, avg(UnscaledValue(ss_ext_discount_amt#106))#116, avg(UnscaledValue(ss_net_paid#107))#117]
+Results [3]: [count(1)#115 AS count(1)#118, cast((avg(UnscaledValue(ss_ext_discount_amt#106))#116 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#119, cast((avg(UnscaledValue(ss_net_paid#107))#117 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#120]
+
+(83) Project
+Output [1]: [named_struct(count(1), count(1)#118, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#119, avg(ss_net_paid), avg(ss_net_paid)#120) AS mergedValue#121]
+Input [3]: [count(1)#118, avg(ss_ext_discount_amt)#119, avg(ss_net_paid)#120]
+
+(84) AdaptiveSparkPlan
+Output [1]: [mergedValue#121]
+Arguments: isFinalPlan=true
+
+Subquery:11 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#11, [id=#12]
+
+Subquery:12 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#11, [id=#12]
+
+Subquery:13 Hosting operator id = 4 Hosting Expression = Subquery subquery#14, [id=#15]
+AdaptiveSparkPlan (103)
++- == Final Plan ==
+   NativeProject (95)
+   +- NativeProject (94)
+      +- NativeHashAggregate (93)
+         +- ShuffleQueryStage (92), Statistics(X)
+            +- NativeShuffleExchange (91)
+               +- NativeHashAggregate (90)
+                  +- NativeProject (89)
+                     +- NativeProject (88)
+                        +- NativeFilter (87)
+                           +- InputAdapter (86)
+                              +- NativeParquetScan  (85)
++- == Initial Plan ==
+   Project (102)
+   +- HashAggregate (101)
+      +- Exchange (100)
+         +- HashAggregate (99)
+            +- Project (98)
+               +- Filter (97)
+                  +- Scan parquet (96)
+
+
+(96) Scan parquet
+Output [3]: [ss_quantity#127, ss_ext_discount_amt#128, ss_net_paid#129]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,81), LessThanOrEqual(ss_quantity,100)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(86) InputAdapter
+Input [3]: [ss_quantity#127, ss_ext_discount_amt#128, ss_net_paid#129]
+Arguments: [#127, #128, #129]
+
+(87) NativeFilter
+Input [3]: [#127#127, #128#128, #129#129]
+Condition : ((isnotnull(ss_quantity#127) AND (ss_quantity#127 >= 81)) AND (ss_quantity#127 <= 100))
+
+(88) NativeProject
+Output [2]: [ss_ext_discount_amt#128, ss_net_paid#129]
+Input [3]: [#127#127, #128#128, #129#129]
+
+(89) NativeProject
+Output [2]: [UnscaledValue(ss_ext_discount_amt#128) AS _c0#130, UnscaledValue(ss_net_paid#129) AS _c1#131]
+Input [2]: [ss_ext_discount_amt#128, ss_net_paid#129]
+
+(90) NativeHashAggregate
+Input [2]: [_c0#130, _c1#131]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(_c0#130), partial_avg(_c1#131)]
+Aggregate Attributes [5]: [count#132, sum#133, count#134, sum#135, count#136]
+Results [5]: [#47, #48, #47, #48, #47]
+
+(91) NativeShuffleExchange
+Input [5]: [#47, #48, #47, #48, #47]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=9]
+
+(92) ShuffleQueryStage
+Output [5]: [#47, #48, #47, #48, #47]
+Arguments: X
+
+(93) NativeHashAggregate
+Input [5]: [#47, #48, #47, #48, #47]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#128)), avg(UnscaledValue(ss_net_paid#129))]
+Aggregate Attributes [3]: [count(1)#137, avg(UnscaledValue(ss_ext_discount_amt#128))#138, avg(UnscaledValue(ss_net_paid#129))#139]
+Results [3]: [count(1)#137, avg(UnscaledValue(ss_ext_discount_amt#128))#138, avg(UnscaledValue(ss_net_paid#129))#139]
+
+(94) NativeProject
+Output [3]: [count(1)#137 AS count(1)#140, cast((avg(UnscaledValue(ss_ext_discount_amt#128))#138 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#141, cast((avg(UnscaledValue(ss_net_paid#129))#139 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#142]
+Input [3]: [count(1)#137, avg(UnscaledValue(ss_ext_discount_amt#128))#138, avg(UnscaledValue(ss_net_paid#129))#139]
+
+(95) NativeProject
+Output [1]: [named_struct(count(1), count(1)#140, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#141, avg(ss_net_paid), avg(ss_net_paid)#142) AS mergedValue#143]
+Input [3]: [count(1)#140, avg(ss_ext_discount_amt)#141, avg(ss_net_paid)#142]
+
+(96) Scan parquet
+Output [3]: [ss_quantity#127, ss_ext_discount_amt#128, ss_net_paid#129]
+Batched: true
+Location: InMemoryFileIndex [file:/<warehouse_dir>]
+PushedFilters: [IsNotNull(ss_quantity), GreaterThanOrEqual(ss_quantity,81), LessThanOrEqual(ss_quantity,100)]
+ReadSchema: struct<ss_quantity:int,ss_ext_discount_amt:decimal(7,2),ss_net_paid:decimal(7,2)>
+
+(97) Filter
+Input [3]: [ss_quantity#127, ss_ext_discount_amt#128, ss_net_paid#129]
+Condition : ((isnotnull(ss_quantity#127) AND (ss_quantity#127 >= 81)) AND (ss_quantity#127 <= 100))
+
+(98) Project
+Output [2]: [ss_ext_discount_amt#128, ss_net_paid#129]
+Input [3]: [ss_quantity#127, ss_ext_discount_amt#128, ss_net_paid#129]
+
+(99) HashAggregate
+Input [2]: [ss_ext_discount_amt#128, ss_net_paid#129]
+Keys: []
+Functions [3]: [partial_count(1), partial_avg(UnscaledValue(ss_ext_discount_amt#128)), partial_avg(UnscaledValue(ss_net_paid#129))]
+Aggregate Attributes [5]: [count#132, sum#133, count#134, sum#135, count#136]
+Results [5]: [count#144, sum#145, count#146, sum#147, count#148]
+
+(100) Exchange
+Input [5]: [count#144, sum#145, count#146, sum#147, count#148]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [plan_id=10]
+
+(101) HashAggregate
+Input [5]: [count#144, sum#145, count#146, sum#147, count#148]
+Keys: []
+Functions [3]: [count(1), avg(UnscaledValue(ss_ext_discount_amt#128)), avg(UnscaledValue(ss_net_paid#129))]
+Aggregate Attributes [3]: [count(1)#137, avg(UnscaledValue(ss_ext_discount_amt#128))#138, avg(UnscaledValue(ss_net_paid#129))#139]
+Results [3]: [count(1)#137 AS count(1)#140, cast((avg(UnscaledValue(ss_ext_discount_amt#128))#138 / 100.0) as decimal(11,6)) AS avg(ss_ext_discount_amt)#141, cast((avg(UnscaledValue(ss_net_paid#129))#139 / 100.0) as decimal(11,6)) AS avg(ss_net_paid)#142]
+
+(102) Project
+Output [1]: [named_struct(count(1), count(1)#140, avg(ss_ext_discount_amt), avg(ss_ext_discount_amt)#141, avg(ss_net_paid), avg(ss_net_paid)#142) AS mergedValue#143]
+Input [3]: [count(1)#140, avg(ss_ext_discount_amt)#141, avg(ss_net_paid)#142]
+
+(103) AdaptiveSparkPlan
+Output [1]: [mergedValue#143]
+Arguments: isFinalPlan=true
+
+Subquery:14 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#14, [id=#15]
+
+Subquery:15 Hosting operator id = 4 Hosting Expression = ReusedSubquery Subquery subquery#14, [id=#15]
+
+

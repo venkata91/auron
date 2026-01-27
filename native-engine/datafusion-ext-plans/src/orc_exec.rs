@@ -109,8 +109,7 @@ impl DisplayAs for OrcExec {
 
         write!(
             f,
-            "OrcExec: file_group={:?}, limit={:?}, projection={:?}, predicate={:?}",
-            file_group, limit, projection, pred
+            "OrcExec: file_group={file_group:?}, limit={limit:?}, projection={projection:?}, predicate={pred:?}"
         )
     }
 }
@@ -518,7 +517,12 @@ fn convert_expr_to_orc(
         }
 
         if predicates.len() == 1 {
-            return Some(predicates.into_iter().next().unwrap());
+            return Some(
+                predicates
+                    .into_iter()
+                    .next()
+                    .expect("Expected non-empty predicates"),
+            );
         }
 
         return Some(Predicate::and(predicates));
@@ -534,7 +538,12 @@ fn convert_expr_to_orc(
         }
 
         if predicates.len() == 1 {
-            return Some(predicates.into_iter().next().unwrap());
+            return Some(
+                predicates
+                    .into_iter()
+                    .next()
+                    .expect("Expected non-empty predicates"),
+            );
         }
 
         return Some(Predicate::or(predicates));
@@ -551,7 +560,12 @@ fn convert_expr_to_orc(
             }
 
             if predicates.len() == 1 {
-                return Some(predicates.into_iter().next().unwrap());
+                return Some(
+                    predicates
+                        .into_iter()
+                        .next()
+                        .expect("Expected non-empty predicates"),
+                );
             }
 
             return Some(Predicate::and(predicates));
@@ -567,7 +581,12 @@ fn convert_expr_to_orc(
             }
 
             if predicates.len() == 1 {
-                return Some(predicates.into_iter().next().unwrap());
+                return Some(
+                    predicates
+                        .into_iter()
+                        .next()
+                        .expect("Expected non-empty predicates"),
+                );
             }
 
             return Some(Predicate::or(predicates));
@@ -803,9 +822,9 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
+        let predicate = result.expect("Expected valid ORC predicate");
         assert_eq!(
-            format!("{:?}", predicate),
+            format!("{predicate:?}"),
             "Comparison { column: \"id\", op: Equal, value: Int32(Some(42)) }"
         );
     }
@@ -819,9 +838,9 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
+        let predicate = result.expect("Expected valid ORC predicate");
         assert_eq!(
-            format!("{:?}", predicate),
+            format!("{predicate:?}"),
             "Comparison { column: \"name\", op: NotEqual, value: Utf8(Some(\"test\")) }"
         );
     }
@@ -879,53 +898,49 @@ mod tests {
         let expr = Arc::new(BinaryExpr::new(lit.clone(), Operator::Lt, col.clone()));
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be GreaterThan, not LessThan
         assert!(
             debug_str.contains("GreaterThan") || debug_str.contains("Gt"),
-            "Expected GreaterThan for reversed Lt, got: {}",
-            debug_str
+            "Expected GreaterThan for reversed Lt, got: {debug_str}"
         );
 
         // Test: 42 <= id → id >= 42
         let expr = Arc::new(BinaryExpr::new(lit.clone(), Operator::LtEq, col.clone()));
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         assert!(
             debug_str.contains("GreaterThanOrEqual")
                 || debug_str.contains("GreaterThanEquals")
                 || debug_str.contains("Gte"),
-            "Expected GreaterThanOrEqual for reversed LtEq, got: {}",
-            debug_str
+            "Expected GreaterThanOrEqual for reversed LtEq, got: {debug_str}"
         );
 
         // Test: 42 > id → id < 42
         let expr = Arc::new(BinaryExpr::new(lit.clone(), Operator::Gt, col.clone()));
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         assert!(
             debug_str.contains("LessThan") || debug_str.contains("Lt"),
-            "Expected LessThan for reversed Gt, got: {}",
-            debug_str
+            "Expected LessThan for reversed Gt, got: {debug_str}"
         );
 
         // Test: 42 >= id → id <= 42
         let expr = Arc::new(BinaryExpr::new(lit, Operator::GtEq, col));
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         assert!(
             debug_str.contains("LessThanOrEqual")
                 || debug_str.contains("LessThanEquals")
                 || debug_str.contains("Lte"),
-            "Expected LessThanOrEqual for reversed GtEq, got: {}",
-            debug_str
+            "Expected LessThanOrEqual for reversed GtEq, got: {debug_str}"
         );
     }
 
@@ -937,8 +952,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        assert_eq!(format!("{:?}", predicate), "IsNull { column: \"name\" }");
+        let predicate = result.expect("Expected valid ORC predicate");
+        assert_eq!(format!("{predicate:?}"), "IsNull { column: \"name\" }");
     }
 
     #[test]
@@ -949,11 +964,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        assert_eq!(
-            format!("{:?}", predicate),
-            "Not(IsNull { column: \"age\" })"
-        );
+        let predicate = result.expect("Expected valid ORC predicate");
+        assert_eq!(format!("{predicate:?}"), "Not(IsNull { column: \"age\" })");
     }
 
     #[test]
@@ -966,8 +978,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(not_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        assert!(format!("{:?}", predicate).starts_with("Not(Comparison"));
+        let predicate = result.expect("Expected valid ORC predicate");
+        assert!(format!("{predicate:?}").starts_with("Not(Comparison"));
     }
 
     #[test]
@@ -986,9 +998,9 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
+        let predicate = result.expect("Expected valid ORC predicate");
         // IN list should be converted to OR of equality predicates
-        assert!(format!("{:?}", predicate).starts_with("Or(["));
+        assert!(format!("{predicate:?}").starts_with("Or(["));
     }
 
     #[test]
@@ -1005,9 +1017,9 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
+        let predicate = result.expect("Expected valid ORC predicate");
         // NOT IN should be converted to NOT(OR(...))
-        assert!(format!("{:?}", predicate).starts_with("Not(Or(["));
+        assert!(format!("{predicate:?}").starts_with("Not(Or(["));
     }
 
     #[test]
@@ -1026,8 +1038,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(and_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        assert!(format!("{:?}", predicate).starts_with("And(["));
+        let predicate = result.expect("Expected valid ORC predicate");
+        assert!(format!("{predicate:?}").starts_with("And(["));
     }
 
     #[test]
@@ -1052,8 +1064,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(and2), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to And([cond1, cond2, cond3])
         assert!(debug_str.starts_with("And(["));
         // Count the number of conditions (should be 3)
@@ -1076,8 +1088,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(or_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        assert!(format!("{:?}", predicate).starts_with("Or(["));
+        let predicate = result.expect("Expected valid ORC predicate");
+        assert!(format!("{predicate:?}").starts_with("Or(["));
     }
 
     #[test]
@@ -1102,8 +1114,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(or2), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to Or([cond1, cond2, cond3])
         assert!(debug_str.starts_with("Or(["));
         let condition_count = debug_str.matches("Comparison").count();
@@ -1130,21 +1142,16 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(and_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should have And at top level
-        assert!(
-            debug_str.contains("And"),
-            "Expected And, got: {}",
-            debug_str
-        );
+        assert!(debug_str.contains("And"), "Expected And, got: {debug_str}");
         // Should contain OR for the id conditions
-        assert!(debug_str.contains("Or"), "Expected Or, got: {}", debug_str);
+        assert!(debug_str.contains("Or"), "Expected Or, got: {debug_str}");
         // Should contain the IS NOT NULL condition
         assert!(
             debug_str.contains("IsNull"),
-            "Expected IsNull, got: {}",
-            debug_str
+            "Expected IsNull, got: {debug_str}",
         );
     }
 
@@ -1176,8 +1183,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(and3), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to And([cond1, cond2, cond3, cond4])
         assert!(debug_str.starts_with("And(["));
         let condition_count = debug_str.matches("Comparison").count();
@@ -1311,8 +1318,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be converted to OR of equality predicates
         // NULL values should be included (even though they won't match)
         assert!(debug_str.starts_with("Or(["));
@@ -1336,8 +1343,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be NOT(OR(...))
         assert!(debug_str.starts_with("Not(Or(["));
     }
@@ -1381,8 +1388,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(and_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to And([...])
         assert!(debug_str.contains("And"));
     }
@@ -1404,8 +1411,8 @@ mod tests {
 
         let result = convert_predicate_to_orc(Some(or_expr), &schema);
         assert!(result.is_some());
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to Or([...])
         assert!(debug_str.contains("Or"));
     }
@@ -1423,15 +1430,19 @@ mod tests {
         ];
 
         for (col_name, null_value) in test_cases {
-            let col = Arc::new(Column::new(col_name, schema.index_of(col_name).unwrap()));
+            let col = Arc::new(Column::new(
+                col_name,
+                schema
+                    .index_of(col_name)
+                    .expect(&format!("Column '{col_name}' not found")),
+            ));
             let null_lit = Arc::new(Literal::new(null_value));
             let expr = Arc::new(BinaryExpr::new(col, Operator::Eq, null_lit));
 
             let result = convert_predicate_to_orc(Some(expr), &schema);
             assert!(
                 result.is_some(),
-                "Failed to convert NULL comparison for column: {}",
-                col_name
+                "Failed to convert NULL comparison for column: {col_name}"
             );
         }
     }
@@ -1472,14 +1483,13 @@ mod tests {
             "WHERE false should produce a predicate even with empty schema"
         );
 
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
 
         // Should use the synthetic column name
         assert!(
             debug_str.contains("__orc_where_false_constant__") || debug_str.contains("And"),
-            "Expected synthetic column or And predicate, got: {}",
-            debug_str
+            "Expected synthetic column or And predicate, got: {debug_str}"
         );
     }
 
@@ -1517,13 +1527,12 @@ mod tests {
         let result = convert_predicate_to_orc(Some(sc_and_expr), &schema);
         assert!(result.is_some(), "SCAndExpr should convert to predicate");
 
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to And([...])
         assert!(
             debug_str.contains("And"),
-            "Expected And predicate, got: {}",
-            debug_str
+            "Expected And predicate, got: {debug_str}",
         );
     }
 
@@ -1545,13 +1554,12 @@ mod tests {
         let result = convert_predicate_to_orc(Some(sc_or_expr), &schema);
         assert!(result.is_some(), "SCOrExpr should convert to predicate");
 
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should be flattened to Or([...])
         assert!(
             debug_str.contains("Or"),
-            "Expected Or predicate, got: {}",
-            debug_str
+            "Expected Or predicate, got: {debug_str}"
         );
     }
 
@@ -1582,18 +1590,16 @@ mod tests {
             "Nested SCAndExpr/SCOrExpr should convert to predicate"
         );
 
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should have And at top level with Or inside
         assert!(
             debug_str.contains("And"),
-            "Expected And at top level, got: {}",
-            debug_str
+            "Expected And at top level, got: {debug_str}"
         );
         assert!(
             debug_str.contains("Or"),
-            "Expected Or inside And, got: {}",
-            debug_str
+            "Expected Or inside And, got: {debug_str}"
         );
     }
 
@@ -1624,20 +1630,18 @@ mod tests {
             "Mixed BinaryExpr/SCAndExpr should convert to predicate"
         );
 
-        let predicate = result.unwrap();
-        let debug_str = format!("{:?}", predicate);
+        let predicate = result.expect("Expected valid ORC predicate");
+        let debug_str = format!("{predicate:?}");
         // Should all be flattened to And([...])
         assert!(
             debug_str.contains("And"),
-            "Expected And predicate, got: {}",
-            debug_str
+            "Expected And predicate, got: {debug_str}"
         );
         // Should have 3 conditions flattened
         let condition_count = debug_str.matches("Comparison").count();
         assert_eq!(
             condition_count, 3,
-            "Expected 3 comparison conditions, got: {}",
-            condition_count
+            "Expected 3 comparison conditions, got: {condition_count}"
         );
     }
 }

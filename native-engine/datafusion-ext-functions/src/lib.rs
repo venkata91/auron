@@ -94,6 +94,7 @@ pub fn create_auron_ext_function(
         "Spark_Second" => Arc::new(spark_dates::spark_second),
         "Spark_BrickhouseArrayUnion" => Arc::new(brickhouse::array_union::array_union),
         "Spark_Round" => Arc::new(spark_round::spark_round),
+        "Spark_BRound" => Arc::new(spark_bround::spark_bround),
         "Spark_NormalizeNanAndZero" => {
             Arc::new(spark_normalize_nan_and_zero::spark_normalize_nan_and_zero)
         }

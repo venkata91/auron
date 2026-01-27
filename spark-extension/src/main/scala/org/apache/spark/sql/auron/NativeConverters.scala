@@ -32,6 +32,7 @@ import org.apache.arrow.vector.VectorSchemaRoot
 import org.apache.arrow.vector.ipc.ArrowStreamWriter
 import org.apache.commons.lang3.reflect.FieldUtils
 import org.apache.commons.lang3.reflect.MethodUtils
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.auron.util.Using
 import org.apache.spark.sql.catalyst.InternalRow
@@ -101,6 +102,10 @@ object NativeConverters extends Logging {
     AuronConverters.getBooleanConf("spark.auron.datetime.extract.enabled", defaultValue = false)
   def castTrimStringEnabled: Boolean =
     AuronConverters.getBooleanConf("spark.auron.cast.trimString", defaultValue = true)
+  def singleChildFallbackEnabled: Boolean =
+    AuronConverters.getBooleanConf(
+      "spark.auron.expression.singleChildFallback.enabled",
+      defaultValue = true)
 
   /**
    * Is the data type(scalar or complex) supported by Auron.
@@ -286,6 +291,10 @@ object NativeConverters extends Logging {
   def convertExpr(sparkExpr: Expression): pb.PhysicalExprNode = {
     def fallbackToError: Expression => pb.PhysicalExprNode = { e =>
       throw new NotImplementedError(s"unsupported expression: (${e.getClass}) $e")
+    }
+
+    if (!singleChildFallbackEnabled) {
+      return convertExprWithFallback(sparkExpr, isPruningExpr = false, fallbackToError)
     }
 
     try {
@@ -862,6 +871,14 @@ object NativeConverters extends Logging {
             buildExtScalarFunction("Spark_Round", Seq(e.child, Literal(0L)), e.dataType)
         }
 
+      case e: BRound =>
+        e.scale match {
+          case Literal(n: Int, _) =>
+            buildExtScalarFunction("Spark_BRound", Seq(e.child, Literal(n.toLong)), e.dataType)
+          case _ =>
+            buildExtScalarFunction("Spark_BRound", Seq(e.child, Literal(0L)), e.dataType)
+        }
+
       case e: Signum => buildScalarFunction(pb.ScalarFunction.Signum, e.children, e.dataType)
       case e: FindInSet =>
         buildScalarFunction(pb.ScalarFunction.FindInSet, e.children, e.dataType)
@@ -1115,6 +1132,11 @@ object NativeConverters extends Logging {
       case StubExpr("RowNum", _, _) =>
         buildExprNode {
           _.setRowNumExpr(pb.RowNumExprNode.newBuilder())
+        }
+
+      case StubExpr("SparkPartitionID", _, _) =>
+        buildExprNode {
+          _.setSparkPartitionIdExpr(pb.SparkPartitionIdExprNode.newBuilder())
         }
 
       // hive UDFJson
@@ -1392,9 +1414,20 @@ object NativeConverters extends Logging {
       serialized: Array[Byte]): (E with Serializable, S) = {
     Utils.tryWithResource(new ByteArrayInputStream(serialized)) { bis =>
       Utils.tryWithResource(new ObjectInputStream(bis)) { ois =>
-        val expr = ois.readObject().asInstanceOf[E with Serializable]
-        val payload = ois.readObject().asInstanceOf[S with Serializable]
-        (expr, payload)
+        def read(): (E with Serializable, S) = {
+          val expr = ois.readObject().asInstanceOf[E with Serializable]
+          val payload = ois.readObject().asInstanceOf[S with Serializable]
+          (expr, payload)
+        }
+        // Spark TaskMetrics#externalAccums is not thread-safe
+        val taskContext = TaskContext.get()
+        if (taskContext != null) {
+          taskContext.taskMetrics().synchronized {
+            read()
+          }
+        } else {
+          read()
+        }
       }
     }
   }

@@ -57,7 +57,7 @@ impl SingleShuffleRepartitioner {
                     .wrap_writer(open_shuffle_file(&self.output_data_file)?),
             ));
         }
-        Ok(output_data.as_mut().unwrap())
+        Ok(output_data.as_mut().expect("missing output writer"))
     }
 }
 
@@ -65,7 +65,7 @@ impl SingleShuffleRepartitioner {
 impl ShuffleRepartitioner for SingleShuffleRepartitioner {
     async fn insert_batch(&self, input: RecordBatch) -> Result<()> {
         let mut output_data = self.output_data.lock().await;
-        let output_writer = self.get_output_writer(&mut *output_data)?;
+        let output_writer = self.get_output_writer(&mut output_data)?;
         output_writer.write_batch(input.num_rows(), input.columns())?;
         Ok(())
     }

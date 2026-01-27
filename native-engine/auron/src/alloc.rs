@@ -20,11 +20,10 @@
 
 use std::{
     alloc::{GlobalAlloc, Layout},
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering::SeqCst},
-    },
+    sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
+
+use parking_lot::Mutex;
 
 #[cfg(any(feature = "jemalloc", feature = "jemalloc-pprof"))]
 #[cfg(not(windows))]
@@ -57,12 +56,12 @@ impl<T: GlobalAlloc> DebugAlloc<T> {
     }
 
     fn update(&self) {
-        let _lock = self.mutex.lock().unwrap();
+        let _lock = self.mutex.lock();
         let current = self.current.load(SeqCst);
         let last_updated = self.last_updated.load(SeqCst);
         let delta = (current as isize - last_updated as isize).abs();
         if delta > 104857600 {
-            eprintln!(" * ALLOC {} -> {}", last_updated, current);
+            eprintln!(" * ALLOC {last_updated} -> {current}");
             self.last_updated.store(current, SeqCst);
         }
     }
