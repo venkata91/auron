@@ -60,7 +60,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         configuration.setString("table.exec.auron.log-level", "INFO");
 
         tableEnvironment =
-                StreamTableEnvironment.create(environment, EnvironmentSettings.fromConfiguration(configuration));
+            StreamTableEnvironment.create(environment, EnvironmentSettings.fromConfiguration(configuration));
 
         System.out.println("🚀 Auron native execution ENABLED in configuration");
     }
@@ -79,7 +79,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
             // Log Auron configuration
             org.apache.auron.flink.planner.AuronFlinkPlannerExtension.logAuronConfiguration(
-                    tableEnvironment.getConfig().getConfiguration());
+                tableEnvironment.getConfig().getConfiguration());
         } catch (UnsatisfiedLinkError e) {
             auronAvailable = false;
             System.out.println("⚠️  Auron native library not available - tests will be skipped");
@@ -96,9 +96,9 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
@@ -122,9 +122,9 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
@@ -153,10 +153,10 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
-                row(4, "David", 350.0, LocalDate.of(2024, 1, 4)));
+            row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
+            row(4, "David", 350.0, LocalDate.of(2024, 1, 4)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
@@ -182,24 +182,24 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
-                row(4, "David", 100.0, LocalDate.of(2024, 1, 4)),
-                row(5, "Eve", 200.0, LocalDate.of(2024, 1, 5)));
+            row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
+            row(4, "David", 100.0, LocalDate.of(2024, 1, 4)),
+            row(5, "Eve", 200.0, LocalDate.of(2024, 1, 5)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
         File parquetDir = createTempParquetDir();
         writeParquetTestData(parquetDir, "complex_filter_test", schema, testData);
         createParquetTable(
-                "parquet_complex_filter_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/complex_filter_test");
+            "parquet_complex_filter_test",
+            schema,
+            "file://" + parquetDir.getAbsolutePath() + "/complex_filter_test");
 
         // Execute query: WHERE amount >= 100 AND amount <= 200
         TableResult result = tableEnvironment.executeSql(
-                "SELECT * FROM parquet_complex_filter_test WHERE amount >= 100 AND amount <= 200");
+            "SELECT * FROM parquet_complex_filter_test WHERE amount >= 100 AND amount <= 200");
 
         List<Row> results = collectResults(result);
 
@@ -216,21 +216,21 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
-                row(4, "David", 350.0, LocalDate.of(2024, 1, 4)));
+            row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
+            row(4, "David", 350.0, LocalDate.of(2024, 1, 4)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
         File parquetDir = createTempParquetDir();
         writeParquetTestData(parquetDir, "proj_filter_test", schema, testData);
         createParquetTable(
-                "parquet_proj_filter_test", schema, "file://" + parquetDir.getAbsolutePath() + "/proj_filter_test");
+            "parquet_proj_filter_test", schema, "file://" + parquetDir.getAbsolutePath() + "/proj_filter_test");
 
         // Execute query: SELECT name, amount WHERE amount > 100
         TableResult result =
-                tableEnvironment.executeSql("SELECT name, amount FROM parquet_proj_filter_test WHERE amount > 100");
+            tableEnvironment.executeSql("SELECT name, amount FROM parquet_proj_filter_test WHERE amount > 100");
 
         List<Row> results = collectResults(result);
 
@@ -250,16 +250,16 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data with various types
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5, true, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 200.5, false, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 300.5, true, LocalDate.of(2024, 1, 3)));
+            row(1, "Alice", 100.5, true, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 200.5, false, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 300.5, true, LocalDate.of(2024, 1, 3)));
 
         String schema = "(" + "  id INT,"
-                + "  name STRING,"
-                + "  amount DOUBLE,"
-                + "  active BOOLEAN,"
-                + "  created_date DATE"
-                + ")";
+            + "  name STRING,"
+            + "  amount DOUBLE,"
+            + "  active BOOLEAN,"
+            + "  created_date DATE"
+            + ")";
 
         File parquetDir = createTempParquetDir();
         writeParquetTestData(parquetDir, "types_test", schema, testData);
@@ -281,7 +281,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data with nulls
         List<Row> testData =
-                Arrays.asList(row(1, "Alice", 100.5), row(2, null, 200.5), row(3, "Charlie", null), row(4, null, null));
+            Arrays.asList(row(1, "Alice", 100.5), row(2, null, 200.5), row(3, "Charlie", null), row(4, null, null));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE" + ")";
 
@@ -308,9 +308,9 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
@@ -338,13 +338,13 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         org.apache.flink.table.types.logical.LogicalType[] fieldTypes = {
             new org.apache.flink.table.types.logical.IntType(),
             new org.apache.flink.table.types.logical.VarCharType(
-                    org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH),
+                org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH),
             new org.apache.flink.table.types.logical.DoubleType(),
             new org.apache.flink.table.types.logical.DateType()
         };
         String[] fieldNames = {"id", "name", "amount", "created_date"};
         org.apache.flink.table.types.logical.RowType rowType =
-                org.apache.flink.table.types.logical.RowType.of(fieldTypes, fieldNames);
+            org.apache.flink.table.types.logical.RowType.of(fieldTypes, fieldNames);
 
         // Get all Parquet files (Flink doesn't add .parquet extension by default)
         File[] parquetFiles = parquetFile.listFiles((dir, name) -> !name.startsWith("."));
@@ -367,15 +367,15 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create native Parquet scan using explicit API
         org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
-                org.apache.auron.flink.planner.AuronFlinkPlannerExtension.createAuronParquetScan(
-                        environment,
-                        filePaths,
-                        rowType,
-                        rowType,
-                        null, // project all fields
-                        null, // no filter predicates
-                        1 // parallelism
-                        );
+            org.apache.auron.flink.planner.AuronFlinkPlannerExtension.createAuronParquetScan(
+                environment,
+                filePaths,
+                rowType,
+                rowType,
+                null, // project all fields
+                null, // no filter predicates
+                1 // parallelism
+            );
 
         System.out.println("✅ Native Parquet scan DataStream created");
 
@@ -389,7 +389,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
             // Collect results from the native execution
             List<org.apache.flink.table.data.RowData> rowDataResults = new java.util.ArrayList<>();
             org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
-                    nativeStream.executeAndCollect();
+                nativeStream.executeAndCollect();
 
             while (iterator.hasNext()) {
                 org.apache.flink.table.data.RowData rowData = iterator.next();
@@ -432,9 +432,9 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create test data
         List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
-                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
-                row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
 
@@ -457,23 +457,23 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         org.apache.flink.table.types.logical.LogicalType[] fullFieldTypes = {
             new org.apache.flink.table.types.logical.IntType(),
             new org.apache.flink.table.types.logical.VarCharType(
-                    org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH),
+                org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH),
             new org.apache.flink.table.types.logical.DoubleType(),
             new org.apache.flink.table.types.logical.DateType()
         };
         String[] fullFieldNames = {"id", "name", "amount", "created_date"};
         org.apache.flink.table.types.logical.RowType fullSchema =
-                org.apache.flink.table.types.logical.RowType.of(fullFieldTypes, fullFieldNames);
+            org.apache.flink.table.types.logical.RowType.of(fullFieldTypes, fullFieldNames);
 
         // Projected schema - only id and name
         org.apache.flink.table.types.logical.LogicalType[] projectedFieldTypes = {
             new org.apache.flink.table.types.logical.IntType(),
             new org.apache.flink.table.types.logical.VarCharType(
-                    org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH)
+                org.apache.flink.table.types.logical.VarCharType.MAX_LENGTH)
         };
         String[] projectedFieldNames = {"id", "name"};
         org.apache.flink.table.types.logical.RowType projectedSchema =
-                org.apache.flink.table.types.logical.RowType.of(projectedFieldTypes, projectedFieldNames);
+            org.apache.flink.table.types.logical.RowType.of(projectedFieldTypes, projectedFieldNames);
 
         // Projection: select only fields 0 and 1 (id and name)
         int[] projectedFields = {0, 1};
@@ -489,15 +489,15 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create native Parquet scan with projection
         org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
-                org.apache.auron.flink.planner.AuronFlinkPlannerExtension.createAuronParquetScan(
-                        environment,
-                        filePaths,
-                        projectedSchema, // output schema (projected)
-                        fullSchema, // full Parquet schema
-                        projectedFields, // fields to project
-                        null, // no filter predicates
-                        1 // parallelism
-                        );
+            org.apache.auron.flink.planner.AuronFlinkPlannerExtension.createAuronParquetScan(
+                environment,
+                filePaths,
+                projectedSchema, // output schema (projected)
+                fullSchema, // full Parquet schema
+                projectedFields, // fields to project
+                null, // no filter predicates
+                1 // parallelism
+            );
 
         System.out.println("✅ Native Parquet scan with projection created");
 
@@ -506,7 +506,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
             System.out.println("🚀 Executing native projection...");
             List<org.apache.flink.table.data.RowData> results = new java.util.ArrayList<>();
             org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
-                    nativeStream.executeAndCollect();
+                nativeStream.executeAndCollect();
 
             while (iterator.hasNext()) {
                 org.apache.flink.table.data.RowData rowData = iterator.next();
@@ -535,4 +535,281 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
             fail("Native projection should succeed: " + e.getMessage());
         }
     }
+
+    @Test
+    public void testNativeStringFunctionLower() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeStringFunctionLower - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native LOWER() String Function");
+
+        // Create test data with mixed case strings
+        List<Row> testData = Arrays.asList(
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "BOB", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "ChArLiE", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "string_test", schema, testData);
+
+        // Get file paths
+        File parquetFile = new File(parquetDir, "string_test");
+        File[] parquetFiles = parquetFile.listFiles((dir, name) -> !name.startsWith("."));
+        assertNotNull(parquetFiles, "Should find parquet files");
+        assertTrue(parquetFiles.length > 0, "Should have at least one parquet file");
+
+        List<String> filePaths = new java.util.ArrayList<>();
+        for (File f : parquetFiles) {
+            filePaths.add("file://" + f.getAbsolutePath());
+        }
+
+        System.out.println("📁 Parquet files: " + filePaths);
+
+        // Build schemas
+        org.apache.flink.table.types.logical.LogicalType[] inputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255),
+            new org.apache.flink.table.types.logical.DoubleType(),
+            new org.apache.flink.table.types.logical.DateType()
+        };
+        String[] inputFieldNames = {"id", "name", "amount", "created_date"};
+        org.apache.flink.table.types.logical.RowType inputRowType =
+            org.apache.flink.table.types.logical.RowType.of(inputFieldTypes, inputFieldNames);
+
+        // Output schema: id, lower_name
+        org.apache.flink.table.types.logical.LogicalType[] outputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255)
+        };
+        String[] outputFieldNames = {"id", "lower_name"};
+        org.apache.flink.table.types.logical.RowType outputRowType =
+            org.apache.flink.table.types.logical.RowType.of(outputFieldTypes, outputFieldNames);
+
+        // Set runtime mode
+        Configuration runtimeConfig = new Configuration();
+        runtimeConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.AUTOMATIC);
+        environment.configure(runtimeConfig);
+
+        // Create scan plan
+        org.apache.auron.protobuf.PhysicalPlanNode scanPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertParquetScan(
+                filePaths, inputRowType, inputRowType, null, null, 1, 0);
+
+        // Build projection with LOWER(name)
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory =
+            new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+                org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+
+        org.apache.calcite.rex.RexBuilder rexBuilder = new org.apache.calcite.rex.RexBuilder(typeFactory);
+
+        // Create RexNode for: id, LOWER(name)
+        List<org.apache.calcite.rex.RexNode> projections = new java.util.ArrayList<>();
+
+        // Projection 1: id (column 0)
+        projections.add(
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER), 0));
+
+        // Projection 2: LOWER(name) - column 1
+        org.apache.calcite.rex.RexNode nameCol =
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255), 1);
+        org.apache.calcite.rex.RexNode lowerCall =
+            rexBuilder.makeCall(org.apache.calcite.sql.fun.SqlStdOperatorTable.LOWER, nameCol);
+        projections.add(lowerCall);
+
+        // Convert to native projection plan
+        org.apache.auron.protobuf.PhysicalPlanNode projectionPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertProjection(
+                scanPlan,
+                projections,
+                Arrays.asList(outputFieldNames),
+                new java.util.ArrayList<>(outputRowType.getChildren()),
+                Arrays.asList(inputFieldNames));
+
+        System.out.println("✅ Native projection plan with LOWER() created");
+
+        // Create operator
+        org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator operator =
+            new org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator(
+                projectionPlan, outputRowType, 0, 1);
+
+        org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
+            environment.addSource(operator).name("AuronStringFunctionTest").setParallelism(1);
+
+        System.out.println("🚀 Executing native LOWER() function...");
+
+        try {
+            List<org.apache.flink.table.data.RowData> results = new java.util.ArrayList<>();
+            org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
+                nativeStream.executeAndCollect();
+
+            while (iterator.hasNext()) {
+                org.apache.flink.table.data.RowData rowData = iterator.next();
+                results.add(rowData);
+
+                int id = rowData.getInt(0);
+                org.apache.flink.table.data.StringData lowerName = rowData.getString(1);
+                System.out.println("  Row: id=" + id + ", lower_name=" + lowerName.toString());
+            }
+            iterator.close();
+
+            // Verify results
+            assertEquals(3, results.size(), "Should return 3 rows");
+
+            // Verify LOWER() worked correctly
+            assertEquals("alice", results.get(0).getString(1).toString());
+            assertEquals("bob", results.get(1).getString(1).toString());
+            assertEquals("charlie", results.get(2).getString(1).toString());
+
+            System.out.println("✅✅✅ NATIVE LOWER() FUNCTION VERIFIED!");
+            System.out.println("🎉 String function executed in Auron native engine!");
+
+        } catch (Exception e) {
+            System.err.println("❌ Native LOWER() execution failed: " + e.getMessage());
+            e.printStackTrace();
+            fail("Native LOWER() should succeed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testNativeStringFunctionUpper() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeStringFunctionUpper - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native UPPER() String Function");
+
+        // Create test data with mixed case strings
+        List<Row> testData = Arrays.asList(
+            row(1, "alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "charlie", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "string_test_upper", schema, testData);
+
+        // Get file paths
+        File parquetFile = new File(parquetDir, "string_test_upper");
+        File[] parquetFiles = parquetFile.listFiles((dir, name) -> !name.startsWith("."));
+        assertNotNull(parquetFiles, "Should find parquet files");
+        assertTrue(parquetFiles.length > 0, "Should have at least one parquet file");
+
+        List<String> filePaths = new java.util.ArrayList<>();
+        for (File f : parquetFiles) {
+            filePaths.add("file://" + f.getAbsolutePath());
+        }
+
+        // Build schemas
+        org.apache.flink.table.types.logical.LogicalType[] inputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255),
+            new org.apache.flink.table.types.logical.DoubleType(),
+            new org.apache.flink.table.types.logical.DateType()
+        };
+        String[] inputFieldNames = {"id", "name", "amount", "created_date"};
+        org.apache.flink.table.types.logical.RowType inputRowType =
+            org.apache.flink.table.types.logical.RowType.of(inputFieldTypes, inputFieldNames);
+
+        // Output schema: id, upper_name
+        org.apache.flink.table.types.logical.LogicalType[] outputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255)
+        };
+        String[] outputFieldNames = {"id", "upper_name"};
+        org.apache.flink.table.types.logical.RowType outputRowType =
+            org.apache.flink.table.types.logical.RowType.of(outputFieldTypes, outputFieldNames);
+
+        // Set runtime mode
+        Configuration runtimeConfig = new Configuration();
+        runtimeConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.AUTOMATIC);
+        environment.configure(runtimeConfig);
+
+        // Create scan plan
+        org.apache.auron.protobuf.PhysicalPlanNode scanPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertParquetScan(
+                filePaths, inputRowType, inputRowType, null, null, 1, 0);
+
+        // Build projection with UPPER(name)
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory =
+            new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+                org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+
+        org.apache.calcite.rex.RexBuilder rexBuilder = new org.apache.calcite.rex.RexBuilder(typeFactory);
+
+        // Create RexNode for: id, UPPER(name)
+        List<org.apache.calcite.rex.RexNode> projections = new java.util.ArrayList<>();
+
+        // Projection 1: id (column 0)
+        projections.add(
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER), 0));
+
+        // Projection 2: UPPER(name) - column 1
+        org.apache.calcite.rex.RexNode nameCol =
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255), 1);
+        org.apache.calcite.rex.RexNode upperCall =
+            rexBuilder.makeCall(org.apache.calcite.sql.fun.SqlStdOperatorTable.UPPER, nameCol);
+        projections.add(upperCall);
+
+        // Convert to native projection plan
+        org.apache.auron.protobuf.PhysicalPlanNode projectionPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertProjection(
+                scanPlan,
+                projections,
+                Arrays.asList(outputFieldNames),
+                new java.util.ArrayList<>(outputRowType.getChildren()),
+                Arrays.asList(inputFieldNames));
+
+        System.out.println("✅ Native projection plan with UPPER() created");
+
+        // Create operator
+        org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator operator =
+            new org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator(
+                projectionPlan, outputRowType, 0, 1);
+
+        org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
+            environment.addSource(operator).name("AuronStringFunctionTest").setParallelism(1);
+
+        System.out.println("🚀 Executing native UPPER() function...");
+
+        try {
+            List<org.apache.flink.table.data.RowData> results = new java.util.ArrayList<>();
+            org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
+                nativeStream.executeAndCollect();
+
+            while (iterator.hasNext()) {
+                org.apache.flink.table.data.RowData rowData = iterator.next();
+                results.add(rowData);
+
+                int id = rowData.getInt(0);
+                org.apache.flink.table.data.StringData upperName = rowData.getString(1);
+                System.out.println("  Row: id=" + id + ", upper_name=" + upperName.toString());
+            }
+            iterator.close();
+
+            // Verify results
+            assertEquals(3, results.size(), "Should return 3 rows");
+
+            // Verify UPPER() worked correctly
+            assertEquals("ALICE", results.get(0).getString(1).toString());
+            assertEquals("BOB", results.get(1).getString(1).toString());
+            assertEquals("CHARLIE", results.get(2).getString(1).toString());
+
+            System.out.println("✅✅✅ NATIVE UPPER() FUNCTION VERIFIED!");
+            System.out.println("🎉 String function executed in Auron native engine!");
+
+        } catch (Exception e) {
+            System.err.println("❌ Native UPPER() execution failed: " + e.getMessage());
+            e.printStackTrace();
+            fail("Native UPPER() should succeed: " + e.getMessage());
+        }
+    }
 }
+

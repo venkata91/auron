@@ -74,24 +74,53 @@ public class FlinkTypeConverter {
             TimestampType timestampType = (TimestampType) flinkType;
             // Flink timestamps can have different precisions, but Auron uses microseconds
             Timestamp timestamp =
-                    Timestamp.newBuilder().setTimeUnit(TimeUnit.Microsecond).build();
+                Timestamp.newBuilder().setTimeUnit(TimeUnit.Microsecond).build();
             return builder.setTIMESTAMP(timestamp).build();
         } else if (flinkType instanceof LocalZonedTimestampType) {
             // LocalZonedTimestamp is similar to Timestamp
             Timestamp timestamp =
-                    Timestamp.newBuilder().setTimeUnit(TimeUnit.Microsecond).build();
+                Timestamp.newBuilder().setTimeUnit(TimeUnit.Microsecond).build();
             return builder.setTIMESTAMP(timestamp).build();
         } else if (flinkType instanceof DecimalType) {
             DecimalType decimalType = (DecimalType) flinkType;
             // Auron supports Decimal128 with specific precision and scale
             Decimal decimal = Decimal.newBuilder()
-                    .setWhole(Math.max(decimalType.getPrecision(), 1))
-                    .setFractional(decimalType.getScale())
-                    .build();
+                .setWhole(Math.max(decimalType.getPrecision(), 1))
+                .setFractional(decimalType.getScale())
+                .build();
             return builder.setDECIMAL(decimal).build();
         } else {
             throw new UnsupportedOperationException(
-                    "Type conversion not supported for: " + flinkType.asSummaryString());
+                "Type conversion not supported for: " + flinkType.asSummaryString());
+        }
+    }
+
+    // Add to FlinkTypeConverter.java (or create if it doesn't exist)
+
+    public static LogicalType fromCalciteType(org.apache.calcite.rel.type.RelDataType calciteType) {
+        switch (calciteType.getSqlTypeName()) {
+            case BOOLEAN:
+                return new BooleanType();
+            case INTEGER:
+                return new IntType();
+            case BIGINT:
+                return new BigIntType();
+            case FLOAT:
+                return new FloatType();
+            case DOUBLE:
+                return new DoubleType();
+            case CHAR:
+                return new CharType(calciteType.getPrecision());
+            case VARCHAR:
+                return new VarCharType(calciteType.getPrecision());
+            case DATE:
+                return new DateType();
+            case TIMESTAMP:
+            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                return new TimestampType(calciteType.getPrecision());
+            default:
+                throw new UnsupportedOperationException(
+                    "Unsupported Calcite type: " + calciteType.getSqlTypeName());
         }
     }
 
@@ -103,18 +132,18 @@ public class FlinkTypeConverter {
      */
     public static boolean isTypeSupported(LogicalType flinkType) {
         return flinkType instanceof BooleanType
-                || flinkType instanceof TinyIntType
-                || flinkType instanceof SmallIntType
-                || flinkType instanceof IntType
-                || flinkType instanceof BigIntType
-                || flinkType instanceof FloatType
-                || flinkType instanceof DoubleType
-                || flinkType instanceof VarCharType
-                || flinkType instanceof CharType
-                || flinkType instanceof DateType
-                || flinkType instanceof TimestampType
-                || flinkType instanceof LocalZonedTimestampType
-                || flinkType instanceof DecimalType;
+            || flinkType instanceof TinyIntType
+            || flinkType instanceof SmallIntType
+            || flinkType instanceof IntType
+            || flinkType instanceof BigIntType
+            || flinkType instanceof FloatType
+            || flinkType instanceof DoubleType
+            || flinkType instanceof VarCharType
+            || flinkType instanceof CharType
+            || flinkType instanceof DateType
+            || flinkType instanceof TimestampType
+            || flinkType instanceof LocalZonedTimestampType
+            || flinkType instanceof DecimalType;
     }
 
     /**

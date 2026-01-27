@@ -52,6 +52,10 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.util.NlsString;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.auron.protobuf.PhysicalScalarFunctionNode;
+import org.apache.auron.protobuf.ScalarFunction;
+import org.apache.calcite.sql.SqlOperator;
+import java.util.ArrayList;
 
 /**
  * Converter for Calcite RexNode expressions to Auron PhysicalExprNode protobuf.
@@ -78,7 +82,7 @@ public class FlinkExpressionConverter {
             return convertCall((RexCall) rexNode, inputFieldNames);
         } else {
             throw new UnsupportedOperationException(
-                    "Unsupported RexNode type: " + rexNode.getClass().getSimpleName());
+                "Unsupported RexNode type: " + rexNode.getClass().getSimpleName());
         }
     }
 
@@ -90,7 +94,7 @@ public class FlinkExpressionConverter {
         String columnName = (index < inputFieldNames.size()) ? inputFieldNames.get(index) : "col_" + index;
 
         PhysicalColumn column =
-                PhysicalColumn.newBuilder().setName(columnName).setIndex(index).build();
+            PhysicalColumn.newBuilder().setName(columnName).setIndex(index).build();
 
         return PhysicalExprNode.newBuilder().setColumn(column).build();
     }
@@ -128,8 +132,8 @@ public class FlinkExpressionConverter {
 
                 byte[] ipcBytes = out.toByteArray();
                 ScalarValue scalarValue = ScalarValue.newBuilder()
-                        .setIpcBytes(ByteString.copyFrom(ipcBytes))
-                        .build();
+                    .setIpcBytes(ByteString.copyFrom(ipcBytes))
+                    .build();
 
                 return PhysicalExprNode.newBuilder().setLiteral(scalarValue).build();
             }
@@ -146,7 +150,7 @@ public class FlinkExpressionConverter {
         List<RexNode> operands = call.getOperands();
 
         switch (kind) {
-                // Comparison operators
+            // Comparison operators
             case EQUALS:
                 return buildBinaryExpr(operands.get(0), operands.get(1), "Eq", inputFieldNames);
             case NOT_EQUALS:
@@ -160,7 +164,7 @@ public class FlinkExpressionConverter {
             case GREATER_THAN_OR_EQUAL:
                 return buildBinaryExpr(operands.get(0), operands.get(1), "GtEq", inputFieldNames);
 
-                // Arithmetic operators
+            // Arithmetic operators
             case PLUS:
                 return buildBinaryExpr(operands.get(0), operands.get(1), "Plus", inputFieldNames);
             case MINUS:
@@ -170,14 +174,17 @@ public class FlinkExpressionConverter {
             case DIVIDE:
                 return buildBinaryExpr(operands.get(0), operands.get(1), "Divide", inputFieldNames);
 
-                // Logical operators (use short-circuit versions for safety)
+            // Logical operators (use short-circuit versions for safety)
             case AND:
                 return buildShortCircuitAnd(operands.get(0), operands.get(1), inputFieldNames);
             case OR:
                 return buildShortCircuitOr(operands.get(0), operands.get(1), inputFieldNames);
             case NOT:
                 return buildNot(operands.get(0), inputFieldNames);
-
+            case OTHER_FUNCTION:
+            case OTHER:
+                // Handle scalar functions (LOWER, UPPER, etc.)
+                return convertScalarFunction(call, inputFieldNames);
             default:
                 throw new UnsupportedOperationException("Unsupported operator: " + kind + " in call: " + call);
         }
@@ -187,12 +194,12 @@ public class FlinkExpressionConverter {
      * Builds a binary expression node.
      */
     private static PhysicalExprNode buildBinaryExpr(
-            RexNode left, RexNode right, String op, List<String> inputFieldNames) {
+        RexNode left, RexNode right, String op, List<String> inputFieldNames) {
         PhysicalBinaryExprNode binaryExpr = PhysicalBinaryExprNode.newBuilder()
-                .setL(convertRexNode(left, inputFieldNames))
-                .setR(convertRexNode(right, inputFieldNames))
-                .setOp(op)
-                .build();
+            .setL(convertRexNode(left, inputFieldNames))
+            .setR(convertRexNode(right, inputFieldNames))
+            .setOp(op)
+            .build();
 
         return PhysicalExprNode.newBuilder().setBinaryExpr(binaryExpr).build();
     }
@@ -202,9 +209,9 @@ public class FlinkExpressionConverter {
      */
     private static PhysicalExprNode buildShortCircuitAnd(RexNode left, RexNode right, List<String> inputFieldNames) {
         PhysicalSCAndExprNode andExpr = PhysicalSCAndExprNode.newBuilder()
-                .setLeft(convertRexNode(left, inputFieldNames))
-                .setRight(convertRexNode(right, inputFieldNames))
-                .build();
+            .setLeft(convertRexNode(left, inputFieldNames))
+            .setRight(convertRexNode(right, inputFieldNames))
+            .build();
 
         return PhysicalExprNode.newBuilder().setScAndExpr(andExpr).build();
     }
@@ -214,11 +221,78 @@ public class FlinkExpressionConverter {
      */
     private static PhysicalExprNode buildShortCircuitOr(RexNode left, RexNode right, List<String> inputFieldNames) {
         PhysicalSCOrExprNode orExpr = PhysicalSCOrExprNode.newBuilder()
-                .setLeft(convertRexNode(left, inputFieldNames))
-                .setRight(convertRexNode(right, inputFieldNames))
-                .build();
+            .setLeft(convertRexNode(left, inputFieldNames))
+            .setRight(convertRexNode(right, inputFieldNames))
+            .build();
 
         return PhysicalExprNode.newBuilder().setScOrExpr(orExpr).build();
+    }
+
+    /**
+     * Converts scalar function calls (LOWER, UPPER, TRIM, etc.) to PhysicalScalarFunctionNode.
+     */
+    private static PhysicalExprNode convertScalarFunction(RexCall call, List<String> inputFieldNames) {
+        SqlOperator operator = call.getOperator();
+        String functionName = operator.getName();
+
+        // Map Flink/Calcite function names to Auron ScalarFunction enum
+        ScalarFunction scalarFunc = mapToScalarFunction(functionName);
+
+        // Convert arguments
+        List<PhysicalExprNode> args = new ArrayList<>();
+        for (RexNode operand : call.getOperands()) {
+            args.add(convertRexNode(operand, inputFieldNames));
+        }
+
+        // Get return type
+        org.apache.auron.protobuf.ArrowType returnType =
+            FlinkTypeConverter.toArrowType(
+                FlinkTypeConverter.fromCalciteType(call.getType())
+            );
+
+        // Build scalar function node
+        PhysicalScalarFunctionNode scalarFuncNode = PhysicalScalarFunctionNode.newBuilder()
+            .setName(functionName)
+            .setFun(scalarFunc)
+            .addAllArgs(args)
+            .setReturnType(returnType)
+            .build();
+
+        return PhysicalExprNode.newBuilder()
+            .setScalarFunction(scalarFuncNode)
+            .build();
+    }
+
+    /**
+     * Maps Flink/Calcite function names to Auron ScalarFunction enum values.
+     */
+    private static ScalarFunction mapToScalarFunction(String functionName) {
+        // Normalize to uppercase for comparison
+        String normalized = functionName.toUpperCase();
+
+        switch (normalized) {
+            // String functions
+            case "LOWER":
+                return ScalarFunction.Lower;
+            case "UPPER":
+                return ScalarFunction.Upper;
+            case "TRIM":
+                return ScalarFunction.Trim;
+            case "LTRIM":
+                return ScalarFunction.Ltrim;
+            case "RTRIM":
+                return ScalarFunction.Rtrim;
+            case "SUBSTRING":
+            case "SUBSTR":
+                return ScalarFunction.Substr;
+            case "CONCAT":
+                return ScalarFunction.Concat;
+            case "REPLACE":
+                return ScalarFunction.Replace;
+            default:
+                throw new UnsupportedOperationException(
+                    "Unsupported scalar function: " + functionName);
+        }
     }
 
     /**
@@ -226,8 +300,8 @@ public class FlinkExpressionConverter {
      */
     private static PhysicalExprNode buildNot(RexNode operand, List<String> inputFieldNames) {
         PhysicalNot notExpr = PhysicalNot.newBuilder()
-                .setExpr(convertRexNode(operand, inputFieldNames))
-                .build();
+            .setExpr(convertRexNode(operand, inputFieldNames))
+            .build();
 
         return PhysicalExprNode.newBuilder().setNotExpr(notExpr).build();
     }
@@ -266,7 +340,7 @@ public class FlinkExpressionConverter {
                 return new ArrowType.Decimal(precision, scale, 128);
             default:
                 throw new UnsupportedOperationException(
-                        "Unsupported Calcite type for literal: " + calciteType.getSqlTypeName());
+                    "Unsupported Calcite type for literal: " + calciteType.getSqlTypeName());
         }
     }
 
@@ -306,9 +380,9 @@ public class FlinkExpressionConverter {
      * Writes a value to an Arrow vector based on the Calcite type.
      */
     private static void writeValueToVector(
-            org.apache.arrow.vector.FieldVector vector,
-            Object value,
-            org.apache.calcite.rel.type.RelDataType calciteType) {
+        org.apache.arrow.vector.FieldVector vector,
+        Object value,
+        org.apache.calcite.rel.type.RelDataType calciteType) {
         switch (calciteType.getSqlTypeName()) {
             case BOOLEAN:
                 ((BitVector) vector).setSafe(0, (Boolean) value ? 1 : 0);
@@ -354,7 +428,7 @@ public class FlinkExpressionConverter {
                 break;
             default:
                 throw new UnsupportedOperationException(
-                        "Unsupported Calcite type for literal write: " + calciteType.getSqlTypeName());
+                    "Unsupported Calcite type for literal write: " + calciteType.getSqlTypeName());
         }
     }
 }
