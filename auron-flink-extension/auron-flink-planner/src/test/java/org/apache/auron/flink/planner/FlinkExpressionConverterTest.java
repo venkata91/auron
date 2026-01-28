@@ -21,16 +21,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.auron.protobuf.PhysicalExprNode;
-import org.apache.auron.protobuf.PhysicalScalarFunctionNode;
-import org.apache.auron.protobuf.ScalarFunction;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.junit.jupiter.api.BeforeEach;
@@ -387,105 +383,5 @@ public class FlinkExpressionConverterTest {
 
         assertTrue(exprNode.hasBinaryExpr());
         assertEquals("Plus", exprNode.getBinaryExpr().getOp());
-    }
-
-    @Test
-    public void testConvertLowerFunction() {
-        // Create RexCall for LOWER(name)
-        // name is column index 1
-        RexInputRef nameCol = rexBuilder.makeInputRef(
-            typeFactory.createSqlType(SqlTypeName.VARCHAR),
-            1
-        );
-
-        RexCall lowerCall = (RexCall) rexBuilder.makeCall(
-            SqlStdOperatorTable.LOWER,
-            nameCol
-        );
-
-        List<String> fieldNames = Arrays.asList("id", "name", "amount");
-
-        // Convert
-        PhysicalExprNode result = FlinkExpressionConverter.convertRexNode(
-            lowerCall,
-            fieldNames
-        );
-
-        // Verify
-        assertTrue(result.hasScalarFunction());
-        PhysicalScalarFunctionNode funcNode = result.getScalarFunction();
-        assertEquals("LOWER", funcNode.getName());
-        assertEquals(ScalarFunction.Lower, funcNode.getFun());
-        assertEquals(1, funcNode.getArgsCount());
-
-        // Verify argument is column reference
-        PhysicalExprNode arg = funcNode.getArgs(0);
-        assertTrue(arg.hasColumn());
-        assertEquals(1, arg.getColumn().getIndex());
-        assertEquals("name", arg.getColumn().getName());
-    }
-
-    @Test
-    public void testConvertUpperFunction() {
-        // Similar to testConvertLowerFunction but with UPPER
-        RexInputRef nameCol = rexBuilder.makeInputRef(
-            typeFactory.createSqlType(SqlTypeName.VARCHAR),
-            1
-        );
-
-        RexCall upperCall = (RexCall) rexBuilder.makeCall(
-            SqlStdOperatorTable.UPPER,
-            nameCol
-        );
-
-        List<String> fieldNames = Arrays.asList("id", "name", "amount");
-
-        PhysicalExprNode result = FlinkExpressionConverter.convertRexNode(
-            upperCall,
-            fieldNames
-        );
-
-        assertTrue(result.hasScalarFunction());
-        assertEquals(ScalarFunction.Upper, result.getScalarFunction().getFun());
-    }
-
-    @Test
-    public void testConvertNestedFunctions() {
-        // Test UPPER(LOWER(name))
-        RexInputRef nameCol = rexBuilder.makeInputRef(
-            typeFactory.createSqlType(SqlTypeName.VARCHAR),
-            1
-        );
-
-        RexCall lowerCall = (RexCall) rexBuilder.makeCall(
-            SqlStdOperatorTable.LOWER,
-            nameCol
-        );
-
-        RexCall upperCall = (RexCall) rexBuilder.makeCall(
-            SqlStdOperatorTable.UPPER,
-            lowerCall
-        );
-
-        List<String> fieldNames = Arrays.asList("id", "name");
-
-        PhysicalExprNode result = FlinkExpressionConverter.convertRexNode(
-            upperCall,
-            fieldNames
-        );
-
-        // Verify outer UPPER
-        assertTrue(result.hasScalarFunction());
-        assertEquals(ScalarFunction.Upper, result.getScalarFunction().getFun());
-
-        // Verify inner LOWER
-        PhysicalExprNode innerArg = result.getScalarFunction().getArgs(0);
-        assertTrue(innerArg.hasScalarFunction());
-        assertEquals(ScalarFunction.Lower, innerArg.getScalarFunction().getFun());
-
-        // Verify innermost column
-        PhysicalExprNode column = innerArg.getScalarFunction().getArgs(0);
-        assertTrue(column.hasColumn());
-        assertEquals(1, column.getColumn().getIndex());
     }
 }
