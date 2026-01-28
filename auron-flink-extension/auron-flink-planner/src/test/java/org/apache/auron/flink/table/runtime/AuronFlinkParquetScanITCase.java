@@ -535,4 +535,280 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
             fail("Native projection should succeed: " + e.getMessage());
         }
     }
+
+    @Test
+    public void testNativeStringFunctionLower() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeStringFunctionLower - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native LOWER() String Function");
+
+        // Create test data with mixed case strings
+        List<Row> testData = Arrays.asList(
+            row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "BOB", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "ChArLiE", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "string_test", schema, testData);
+
+        // Get file paths
+        File parquetFile = new File(parquetDir, "string_test");
+        File[] parquetFiles = parquetFile.listFiles((dir, name) -> !name.startsWith("."));
+        assertNotNull(parquetFiles, "Should find parquet files");
+        assertTrue(parquetFiles.length > 0, "Should have at least one parquet file");
+
+        List<String> filePaths = new java.util.ArrayList<>();
+        for (File f : parquetFiles) {
+            filePaths.add("file://" + f.getAbsolutePath());
+        }
+
+        System.out.println("📁 Parquet files: " + filePaths);
+
+        // Build schemas
+        org.apache.flink.table.types.logical.LogicalType[] inputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255),
+            new org.apache.flink.table.types.logical.DoubleType(),
+            new org.apache.flink.table.types.logical.DateType()
+        };
+        String[] inputFieldNames = {"id", "name", "amount", "created_date"};
+        org.apache.flink.table.types.logical.RowType inputRowType =
+            org.apache.flink.table.types.logical.RowType.of(inputFieldTypes, inputFieldNames);
+
+        // Output schema: id, lower_name
+        org.apache.flink.table.types.logical.LogicalType[] outputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255)
+        };
+        String[] outputFieldNames = {"id", "lower_name"};
+        org.apache.flink.table.types.logical.RowType outputRowType =
+            org.apache.flink.table.types.logical.RowType.of(outputFieldTypes, outputFieldNames);
+
+        // Set runtime mode
+        Configuration runtimeConfig = new Configuration();
+        runtimeConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.AUTOMATIC);
+        environment.configure(runtimeConfig);
+
+        // Create scan plan
+        org.apache.auron.protobuf.PhysicalPlanNode scanPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertParquetScan(
+                filePaths, inputRowType, inputRowType, null, null, 1, 0);
+
+        // Build projection with LOWER(name)
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory =
+            new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+                org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+
+        org.apache.calcite.rex.RexBuilder rexBuilder = new org.apache.calcite.rex.RexBuilder(typeFactory);
+
+        // Create RexNode for: id, LOWER(name)
+        List<org.apache.calcite.rex.RexNode> projections = new java.util.ArrayList<>();
+
+        // Projection 1: id (column 0)
+        projections.add(
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER), 0));
+
+        // Projection 2: LOWER(name) - column 1
+        org.apache.calcite.rex.RexNode nameCol =
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255), 1);
+        org.apache.calcite.rex.RexNode lowerCall =
+            rexBuilder.makeCall(org.apache.calcite.sql.fun.SqlStdOperatorTable.LOWER, nameCol);
+        projections.add(lowerCall);
+
+        // Convert to native projection plan
+        org.apache.auron.protobuf.PhysicalPlanNode projectionPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertProjection(
+                scanPlan,
+                projections,
+                Arrays.asList(outputFieldNames),
+                new java.util.ArrayList<>(outputRowType.getChildren()),
+                Arrays.asList(inputFieldNames));
+
+        System.out.println("✅ Native projection plan with LOWER() created");
+
+        // Create operator
+        org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator operator =
+            new org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator(
+                projectionPlan, outputRowType, 0, 1);
+
+        org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
+            environment.addSource(operator).name("AuronStringFunctionTest").setParallelism(1);
+
+        System.out.println("🚀 Executing native LOWER() function...");
+
+        try {
+            List<org.apache.flink.table.data.RowData> results = new java.util.ArrayList<>();
+            org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
+                nativeStream.executeAndCollect();
+
+            while (iterator.hasNext()) {
+                org.apache.flink.table.data.RowData rowData = iterator.next();
+                results.add(rowData);
+
+                int id = rowData.getInt(0);
+                org.apache.flink.table.data.StringData lowerName = rowData.getString(1);
+                System.out.println("  Row: id=" + id + ", lower_name=" + lowerName.toString());
+            }
+            iterator.close();
+
+            // Verify results
+            assertEquals(3, results.size(), "Should return 3 rows");
+
+            // Verify LOWER() worked correctly
+            assertEquals("alice", results.get(0).getString(1).toString());
+            assertEquals("bob", results.get(1).getString(1).toString());
+            assertEquals("charlie", results.get(2).getString(1).toString());
+
+            System.out.println("✅✅✅ NATIVE LOWER() FUNCTION VERIFIED!");
+            System.out.println("🎉 String function executed in Auron native engine!");
+
+        } catch (Exception e) {
+            System.err.println("❌ Native LOWER() execution failed: " + e.getMessage());
+            e.printStackTrace();
+            fail("Native LOWER() should succeed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testNativeStringFunctionUpper() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeStringFunctionUpper - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native UPPER() String Function");
+
+        // Create test data with mixed case strings
+        List<Row> testData = Arrays.asList(
+            row(1, "alice", 100.5, LocalDate.of(2024, 1, 1)),
+            row(2, "bob", 200.5, LocalDate.of(2024, 1, 2)),
+            row(3, "charlie", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "string_test_upper", schema, testData);
+
+        // Get file paths
+        File parquetFile = new File(parquetDir, "string_test_upper");
+        File[] parquetFiles = parquetFile.listFiles((dir, name) -> !name.startsWith("."));
+        assertNotNull(parquetFiles, "Should find parquet files");
+        assertTrue(parquetFiles.length > 0, "Should have at least one parquet file");
+
+        List<String> filePaths = new java.util.ArrayList<>();
+        for (File f : parquetFiles) {
+            filePaths.add("file://" + f.getAbsolutePath());
+        }
+
+        // Build schemas
+        org.apache.flink.table.types.logical.LogicalType[] inputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255),
+            new org.apache.flink.table.types.logical.DoubleType(),
+            new org.apache.flink.table.types.logical.DateType()
+        };
+        String[] inputFieldNames = {"id", "name", "amount", "created_date"};
+        org.apache.flink.table.types.logical.RowType inputRowType =
+            org.apache.flink.table.types.logical.RowType.of(inputFieldTypes, inputFieldNames);
+
+        // Output schema: id, upper_name
+        org.apache.flink.table.types.logical.LogicalType[] outputFieldTypes = {
+            new org.apache.flink.table.types.logical.IntType(),
+            new org.apache.flink.table.types.logical.VarCharType(255)
+        };
+        String[] outputFieldNames = {"id", "upper_name"};
+        org.apache.flink.table.types.logical.RowType outputRowType =
+            org.apache.flink.table.types.logical.RowType.of(outputFieldTypes, outputFieldNames);
+
+        // Set runtime mode
+        Configuration runtimeConfig = new Configuration();
+        runtimeConfig.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.AUTOMATIC);
+        environment.configure(runtimeConfig);
+
+        // Create scan plan
+        org.apache.auron.protobuf.PhysicalPlanNode scanPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertParquetScan(
+                filePaths, inputRowType, inputRowType, null, null, 1, 0);
+
+        // Build projection with UPPER(name)
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory =
+            new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+                org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+
+        org.apache.calcite.rex.RexBuilder rexBuilder = new org.apache.calcite.rex.RexBuilder(typeFactory);
+
+        // Create RexNode for: id, UPPER(name)
+        List<org.apache.calcite.rex.RexNode> projections = new java.util.ArrayList<>();
+
+        // Projection 1: id (column 0)
+        projections.add(
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER), 0));
+
+        // Projection 2: UPPER(name) - column 1
+        org.apache.calcite.rex.RexNode nameCol =
+            rexBuilder.makeInputRef(typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255), 1);
+        org.apache.calcite.rex.RexNode upperCall =
+            rexBuilder.makeCall(org.apache.calcite.sql.fun.SqlStdOperatorTable.UPPER, nameCol);
+        projections.add(upperCall);
+
+        // Convert to native projection plan
+        org.apache.auron.protobuf.PhysicalPlanNode projectionPlan =
+            org.apache.auron.flink.planner.AuronFlinkConverters.convertProjection(
+                scanPlan,
+                projections,
+                Arrays.asList(outputFieldNames),
+                new java.util.ArrayList<>(outputRowType.getChildren()),
+                Arrays.asList(inputFieldNames));
+
+        System.out.println("✅ Native projection plan with UPPER() created");
+
+        // Create operator
+        org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator operator =
+            new org.apache.auron.flink.planner.execution.AuronBatchExecutionWrapperOperator(
+                projectionPlan, outputRowType, 0, 1);
+
+        org.apache.flink.streaming.api.datastream.DataStream<org.apache.flink.table.data.RowData> nativeStream =
+            environment.addSource(operator).name("AuronStringFunctionTest").setParallelism(1);
+
+        System.out.println("🚀 Executing native UPPER() function...");
+
+        try {
+            List<org.apache.flink.table.data.RowData> results = new java.util.ArrayList<>();
+            org.apache.flink.util.CloseableIterator<org.apache.flink.table.data.RowData> iterator =
+                nativeStream.executeAndCollect();
+
+            while (iterator.hasNext()) {
+                org.apache.flink.table.data.RowData rowData = iterator.next();
+                results.add(rowData);
+
+                int id = rowData.getInt(0);
+                org.apache.flink.table.data.StringData upperName = rowData.getString(1);
+                System.out.println("  Row: id=" + id + ", upper_name=" + upperName.toString());
+            }
+            iterator.close();
+
+            // Verify results
+            assertEquals(3, results.size(), "Should return 3 rows");
+
+            // Verify UPPER() worked correctly
+            assertEquals("ALICE", results.get(0).getString(1).toString());
+            assertEquals("BOB", results.get(1).getString(1).toString());
+            assertEquals("CHARLIE", results.get(2).getString(1).toString());
+
+            System.out.println("✅✅✅ NATIVE UPPER() FUNCTION VERIFIED!");
+            System.out.println("🎉 String function executed in Auron native engine!");
+
+        } catch (Exception e) {
+            System.err.println("❌ Native UPPER() execution failed: " + e.getMessage());
+            e.printStackTrace();
+            fail("Native UPPER() should succeed: " + e.getMessage());
+        }
+    }
 }
