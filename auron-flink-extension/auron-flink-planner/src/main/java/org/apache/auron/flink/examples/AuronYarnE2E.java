@@ -19,9 +19,7 @@ package org.apache.auron.flink.examples;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.auron.flink.planner.AuronFlinkPlannerExtension;
-import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.data.RowData;
@@ -46,8 +44,10 @@ public class AuronYarnE2E {
         env.setParallelism(parallelism);
 
         Configuration config = new Configuration();
-        // BATCH doesn't work due to: Caused by: java.lang.IllegalStateException: Detected an UNBOUNDED source with the 'execution.runtime-mode' set to 'BATCH'. This combination is not allowed, please set the 'execution.runtime-mode' to STREAMING or AUTOMATIC
-//        config.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
+        // BATCH doesn't work due to: Caused by: java.lang.IllegalStateException: Detected an UNBOUNDED source with the
+        // 'execution.runtime-mode' set to 'BATCH'. This combination is not allowed, please set the
+        // 'execution.runtime-mode' to STREAMING or AUTOMATIC
+        //        config.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
         env.configure(config);
 
         // Enable Auron
