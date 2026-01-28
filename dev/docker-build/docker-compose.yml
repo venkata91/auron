@@ -29,6 +29,11 @@ services:
       - ./../../target-docker/spark-extension-shims-spark-target:/auron/spark-extension-shims-spark/target:rw
       - ./../../target-docker/build-helper-proto-target:/auron/dev/mvn-build-helper/proto/target:rw
       - ./../../target-docker/build-helper-assembly-target:/auron/dev/mvn-build-helper/assembly/target:rw
+      - ./../../target-docker/auron-flink-extension-target:/auron/auron-flink-extension/target:rw
+      - ./../../target-docker/auron-flink-runtime-target:/auron/auron-flink-extension/auron-flink-runtime/target:rw
+      - ./../../target-docker/auron-flink-planner-target:/auron/auron-flink-extension/auron-flink-planner/target:rw
+      - ./../../target-docker/auron-flink-assembly-target:/auron/auron-flink-extension/auron-flink-assembly/target:rw
+      - ./../../target-docker/native-engine:/auron/native-engine/_build:rw
     environment:
       RUSTFLAGS: "-C target-cpu=skylake"
       AURON_BUILD_ARGS: "${AURON_BUILD_ARGS}"

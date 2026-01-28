@@ -78,7 +78,7 @@ cd "$SCRIPT_DIR"
 
 # Build only Flink modules (avoid Spark compilation issues)
 ./build/apache-maven-3.9.12/bin/mvn $PHASE $SKIP_TESTS \
-  -pl auron-flink-extension/auron-flink-planner -am \
+  -pl auron-flink-extension/auron-flink-assembly -am \
   -Pflink-1.18 -Pscala-2.12
 
 echo ""

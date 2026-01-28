@@ -51,6 +51,8 @@ BUILD_AURON=true
 FLINK_CLEAN=""
 AURON_CLEAN=""
 SKIP_TESTS="-DskipTests"
+USE_DOCKER=false
+DOCKER_IMAGE="centos7"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -80,6 +82,19 @@ while [[ $# -gt 0 ]]; do
       SKIP_TESTS="-DskipTests"
       shift
       ;;
+    --docker)
+      USE_DOCKER=true
+      shift
+      ;;
+    --image)
+      if [[ -n "$2" && "$2" != -* ]]; then
+        DOCKER_IMAGE="$2"
+        shift 2
+      else
+        echo "ERROR: --image requires an image name (centos7, ubuntu24, etc.)"
+        exit 1
+      fi
+      ;;
     --help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
@@ -90,14 +105,18 @@ while [[ $# -gt 0 ]]; do
       echo "  --flink-clean       Clean Flink build only"
       echo "  --auron-clean       Clean Auron build only"
       echo "  --skip-tests        Skip tests for both builds (faster)"
+      echo "  --docker            Build Auron in Docker (generates Linux x86_64 libauron.so)"
+      echo "  --image <name>      Docker image to use (centos7, ubuntu24, rockylinux8, debian11, azurelinux3)"
       echo "  --help              Show this help message"
       echo ""
       echo "Examples:"
-      echo "  $0                          # Build both Flink and Auron"
+      echo "  $0                          # Build both Flink and Auron (local)"
       echo "  $0 --clean                  # Clean build both from scratch"
       echo "  $0 --flink-only             # Build only Flink"
       echo "  $0 --auron-only             # Build only Auron"
       echo "  $0 --skip-tests             # Fast build, skip all tests"
+      echo "  $0 --docker --image centos7 # Build Auron in Docker (Linux x86_64)"
+      echo "  $0 --auron-only --docker    # Build only Auron in Docker"
       exit 0
       ;;
     *)
@@ -119,7 +138,16 @@ echo -e "${YELLOW}Configuration:${NC}"
 echo -e "  Java: $JAVA_HOME"
 echo -e "  Build Flink: $BUILD_FLINK"
 echo -e "  Build Auron: $BUILD_AURON"
-echo -e "  Skip Tests: $([ \"$SKIP_TESTS\" = \"-DskipTests\" ] && echo \"Yes\" || echo \"No\")"
+if [ "$SKIP_TESTS" = "-DskipTests" ]; then
+  echo -e "  Skip Tests: Yes"
+else
+  echo -e "  Skip Tests: No"
+fi
+if [ "$USE_DOCKER" = true ]; then
+  echo -e "  Docker Build: Yes ($DOCKER_IMAGE)"
+else
+  echo -e "  Docker Build: No"
+fi
 echo ""
 
 # Function to check if Flink needs to be built
@@ -215,14 +243,63 @@ if [ "$BUILD_AURON" = true ]; then
 
   cd "$SCRIPT_DIR"
 
-  echo -e "${GREEN}Building Auron against Flink 1.18-SNAPSHOT...${NC}"
-  echo ""
+  if [ "$USE_DOCKER" = true ]; then
+    echo -e "${GREEN}Building Auron in Docker ($DOCKER_IMAGE) for Linux x86_64...${NC}"
+    echo -e "${YELLOW}This will generate libauron.so for Linux${NC}"
+    echo ""
 
-  # Use the existing build-flink.sh script
-  if [ -n "$AURON_CLEAN" ]; then
-    ./build-flink.sh clean
+    # Prepare Docker build arguments
+    MAVEN_PHASE="install"
+    if [ -n "$AURON_CLEAN" ]; then
+      MAVEN_PHASE="clean install"
+    fi
+
+    # Clean Docker target directory if doing clean build
+    if [ -n "$AURON_CLEAN" ]; then
+      echo -e "${YELLOW}Cleaning Docker build artifacts...${NC}"
+      rm -rf ./target-docker/* || echo "[WARN] Failed to clean target-docker/*"
+    fi
+
+    # Set environment variables for Docker Compose
+    export DOCKER_DEFAULT_PLATFORM=linux/amd64
+    export BUILD_CONTEXT="./${DOCKER_IMAGE}"
+    export AURON_BUILD_ARGS="$MAVEN_PHASE -DskipTests -Dmaven.test.skip=true -pl auron-flink-extension/auron-flink-assembly -am -Pflink-1.18 -Pscala-2.12 -T8"
+
+    echo -e "${BLUE}Docker build arguments: $AURON_BUILD_ARGS${NC}"
+    echo ""
+
+    # Run Docker Compose
+    docker compose -f dev/docker-build/docker-compose.yml up --abort-on-container-exit
+
+    if [ $? -ne 0 ]; then
+      echo -e "${RED}❌ Docker build failed${NC}"
+      exit 1
+    fi
+
+    # Copy libauron.so from Docker build to native-engine/_build/release/
+    echo ""
+    echo -e "${BLUE}Copying libauron.so from Docker build...${NC}"
+    DOCKER_LIBAURON="target-docker/native-engine/_build/release/libauron.so"
+    if [ -f "$DOCKER_LIBAURON" ]; then
+      mkdir -p native-engine/_build/release/
+      cp -f "$DOCKER_LIBAURON" native-engine/_build/release/libauron.so
+      echo -e "${GREEN}✅ Copied libauron.so to native-engine/_build/release/${NC}"
+      file native-engine/_build/release/libauron.so
+    else
+      echo -e "${RED}❌ libauron.so not found in Docker build output${NC}"
+      exit 1
+    fi
+
   else
-    ./build-flink.sh install
+    echo -e "${GREEN}Building Auron locally (native architecture)...${NC}"
+    echo ""
+
+    # Use the existing build-flink.sh script
+    if [ -n "$AURON_CLEAN" ]; then
+      ./build-flink.sh clean
+    else
+      ./build-flink.sh install
+    fi
   fi
 
   echo ""
