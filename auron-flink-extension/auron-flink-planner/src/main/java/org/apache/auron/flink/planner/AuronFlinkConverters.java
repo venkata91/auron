@@ -326,6 +326,6 @@ public class AuronFlinkConverters {
         } catch (Exception e) {
             System.err.println("Warning: Could not get HDFS file size for " + pathStr + ": " + e.getMessage());
         }
-        return 0;
+        return getFileSize(pathStr);
     }
 }
