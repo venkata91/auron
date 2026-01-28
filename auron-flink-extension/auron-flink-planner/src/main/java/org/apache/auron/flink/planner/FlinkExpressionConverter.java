@@ -229,7 +229,7 @@ public class FlinkExpressionConverter {
     }
 
     /**
-     * Converts scalar function calls (LOWER, UPPER) to PhysicalScalarFunctionNode.
+     * Converts scalar function calls (LOWER, UPPER, TRIM, etc.) to PhysicalScalarFunctionNode.
      */
     private static PhysicalExprNode convertScalarFunction(RexCall call, List<String> inputFieldNames) {
         SqlOperator operator = call.getOperator();
@@ -276,6 +276,19 @@ public class FlinkExpressionConverter {
                 return ScalarFunction.Lower;
             case "UPPER":
                 return ScalarFunction.Upper;
+            case "TRIM":
+                return ScalarFunction.Trim;
+            case "LTRIM":
+                return ScalarFunction.Ltrim;
+            case "RTRIM":
+                return ScalarFunction.Rtrim;
+            case "SUBSTRING":
+            case "SUBSTR":
+                return ScalarFunction.Substr;
+            case "CONCAT":
+                return ScalarFunction.Concat;
+            case "REPLACE":
+                return ScalarFunction.Replace;
             default:
                 throw new UnsupportedOperationException(
                     "Unsupported scalar function: " + functionName);

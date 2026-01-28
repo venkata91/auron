@@ -95,6 +95,8 @@ public class FlinkTypeConverter {
         }
     }
 
+    // Add to FlinkTypeConverter.java (or create if it doesn't exist)
+
     public static LogicalType fromCalciteType(org.apache.calcite.rel.type.RelDataType calciteType) {
         switch (calciteType.getSqlTypeName()) {
             case BOOLEAN:
