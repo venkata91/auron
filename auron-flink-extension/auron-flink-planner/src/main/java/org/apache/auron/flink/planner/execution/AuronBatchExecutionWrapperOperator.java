@@ -22,6 +22,7 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.auron.jni.AuronCallNativeWrapper;
 import org.apache.auron.jni.FlinkAuronAdaptor;
+import org.apache.auron.jni.JniBridge;
 import org.apache.auron.metric.MetricNode;
 import org.apache.auron.protobuf.PhysicalPlanNode;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -34,17 +35,16 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.auron.jni.JniBridge;
-import org.apache.hadoop.fs.FileSystem;
 
 /**
  * Flink SourceFunction that wraps Auron native execution.
  * Executes a PhysicalPlanNode using the Auron native engine and emits results as Flink RowData.
  */
 public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowData>
-    implements ResultTypeQueryable<RowData> {
+        implements ResultTypeQueryable<RowData> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuronBatchExecutionWrapperOperator.class);
 
@@ -57,6 +57,7 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
     private transient AuronCallNativeWrapper nativeWrapper;
     private transient volatile boolean isRunning;
     private transient String fsResourceId;
+    private transient boolean registeredFs; // Track if we registered the FileSystem
 
     /**
      * Creates a new Auron batch execution wrapper.
@@ -79,6 +80,27 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
         super.open(parameters);
         isRunning = true;
 
+        // Get runtime parallelism information from Flink
+        int taskIndex = getRuntimeContext().getIndexOfThisSubtask();
+        int totalParallelism = getRuntimeContext().getNumberOfParallelSubtasks();
+
+        LOG.info(
+                "Initializing Auron execution for task {}/{} (partition={}, stage={})",
+                taskIndex,
+                totalParallelism,
+                partitionId,
+                stageId);
+
+        // Modify plan for distributed execution
+        PhysicalPlanNode taskPlan = org.apache.auron.flink.planner.runtime.PlanModifier.modifyForTask(
+                nativePlan, taskIndex, totalParallelism);
+
+        // Extract the resource ID from the modified plan (PlanModifier sets this)
+        // We need to traverse the plan to find the ParquetScan and get its resource ID
+        fsResourceId = extractResourceIdFromPlan(taskPlan);
+
+        LOG.info("Using FileSystem resource ID from plan: {}", fsResourceId);
+
         // Get Flink configuration and set in thread context
         // Check if GlobalJobParameters is actually a Configuration
         Configuration config = parameters;
@@ -86,13 +108,23 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
             config = (Configuration) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
         }
         FlinkAuronAdaptor.setThreadConfiguration(config);
-// Initialize and register Hadoop FileSystem for native Parquet reading
+        // Initialize and register Hadoop FileSystem for native Parquet reading
+        // NOTE: FileSystem must be registered BEFORE native execution starts
+        // The resource ID must match what's in the PhysicalPlanNode protobuf
         try {
             org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
             FileSystem fs = FileSystem.get(hadoopConf);
-            fsResourceId = "flink-parquet-scan-" + partitionId;
-            JniBridge.putResource(fsResourceId, fs);
-            LOG.info("Registered Hadoop FileSystem with resource ID: {}", fsResourceId);
+
+            // Register FileSystem for this task
+            // Multiple tasks may share the same resource ID, so we use synchronized access
+            synchronized (JniBridge.class) {
+                JniBridge.putResource(fsResourceId, fs);
+                registeredFs = true;
+            }
+            LOG.info(
+                    "Registered Hadoop FileSystem with resource ID: {} for task {}",
+                    fsResourceId,
+                    getRuntimeContext().getIndexOfThisSubtask());
         } catch (Exception e) {
             LOG.error("Failed to initialize Hadoop FileSystem", e);
             throw new RuntimeException("Failed to initialize Hadoop FileSystem for Auron native execution", e);
@@ -107,8 +139,9 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
 
         LOG.info("Initializing Auron native execution for partition {} stage {} task {}", partitionId, stageId, taskId);
 
+        // Use task-specific plan for native wrapper
         nativeWrapper = new AuronCallNativeWrapper(
-                allocator, nativePlan, emptyMetrics, partitionId, stageId, taskId, nativeMemory);
+                allocator, taskPlan, emptyMetrics, partitionId, stageId, taskId, nativeMemory);
 
         LOG.info("Auron native execution initialized successfully");
     }
@@ -217,24 +250,55 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
                 allocator.close();
                 allocator = null;
             }
-            // Close and unregister Hadoop FileSystem
-            if (fsResourceId != null) {
-                try {
-                    Object fsObj = JniBridge.getResource(fsResourceId);
-                    if (fsObj instanceof FileSystem) {
-                        ((FileSystem) fsObj).close();
-                    }
-                    JniBridge.getResource(fsResourceId); // Remove from map
-                } catch (Exception e) {
-                    LOG.warn("Failed to close Hadoop FileSystem: {}", e.getMessage());
-                }
-                LOG.info("Closed Hadoop FileSystem with resource ID: {}", fsResourceId);
+            // Note: We don't close the Hadoop FileSystem here because it may be shared
+            // across multiple tasks. Hadoop FileSystem.get() returns a cached instance
+            // that shouldn't be closed by individual tasks.
+            if (fsResourceId != null && registeredFs) {
+                LOG.info("Task cleanup complete for resource ID: {}", fsResourceId);
             }
             FlinkAuronAdaptor.clearThreadConfiguration();
         } finally {
             super.close();
         }
         LOG.info("Closed Auron native execution wrapper");
+    }
+
+    /**
+     * Recursively extracts the FileSystem resource ID from a plan tree.
+     * Traverses the plan looking for ParquetScan nodes and returns the first resource ID found.
+     */
+    private String extractResourceIdFromPlan(PhysicalPlanNode plan) {
+        switch (plan.getPhysicalPlanTypeCase()) {
+            case PARQUET_SCAN:
+                return plan.getParquetScan().getFsResourceId();
+
+            case PROJECTION:
+                if (plan.getProjection().hasInput()) {
+                    return extractResourceIdFromPlan(plan.getProjection().getInput());
+                }
+                break;
+
+            case FILTER:
+                if (plan.getFilter().hasInput()) {
+                    return extractResourceIdFromPlan(plan.getFilter().getInput());
+                }
+                break;
+
+            case LIMIT:
+                if (plan.getLimit().hasInput()) {
+                    return extractResourceIdFromPlan(plan.getLimit().getInput());
+                }
+                break;
+
+            default:
+                LOG.warn("Unknown or unsupported plan type: {}", plan.getPhysicalPlanTypeCase());
+        }
+
+        // Fallback: this shouldn't happen with valid Parquet scan plans
+        LOG.error("Could not find ParquetScan in plan tree, using fallback resource ID");
+        return String.format(
+                "flink-parquet-scan-%d-task-%d",
+                partitionId, getRuntimeContext().getIndexOfThisSubtask());
     }
 
     @Override
