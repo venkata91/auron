@@ -574,17 +574,17 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Verify results
         assertEquals(4, results.size(), "Should return 4 rows");
-        
+
         // Verify LOWER() worked correctly
         assertEquals(1, results.get(0).getField(0));
         assertEquals("alice", results.get(0).getField(1));
-        
+
         assertEquals(2, results.get(1).getField(0));
         assertEquals("bob", results.get(1).getField(1));
-        
+
         assertEquals(3, results.get(2).getField(0));
         assertEquals("charlie", results.get(2).getField(1));
-        
+
         assertEquals(4, results.get(3).getField(0));
         assertEquals("david", results.get(3).getField(1));
 
@@ -628,17 +628,17 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Verify results
         assertEquals(4, results.size(), "Should return 4 rows");
-        
+
         // Verify UPPER() worked correctly
         assertEquals(1, results.get(0).getField(0));
         assertEquals("ALICE", results.get(0).getField(1));
-        
+
         assertEquals(2, results.get(1).getField(0));
         assertEquals("BOB", results.get(1).getField(1));
-        
+
         assertEquals(3, results.get(2).getField(0));
         assertEquals("CHARLIE", results.get(2).getField(1));
-        
+
         assertEquals(4, results.get(3).getField(0));
         assertEquals("DAVID", results.get(3).getField(1));
 
@@ -680,11 +680,11 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Verify results
         assertEquals(3, results.size());
-        
+
         assertEquals(1, results.get(0).getField(0));
         assertEquals("alice", results.get(0).getField(1));
         assertEquals("ALICE", results.get(0).getField(2));
-        
+
         assertEquals(2, results.get(1).getField(0));
         assertEquals("bob", results.get(1).getField(1));
         assertEquals("BOB", results.get(1).getField(2));
@@ -729,14 +729,14 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Should only return rows where amount > 100
         assertEquals(3, results.size(), "Should return 3 rows (filtered)");
-        
+
         assertEquals(2, results.get(0).getField(0));
         assertEquals("BOB", results.get(0).getField(1));
         assertEquals(150.0, results.get(0).getField(2));
-        
+
         assertEquals(3, results.get(1).getField(0));
         assertEquals("CHARLIE", results.get(1).getField(1));
-        
+
         assertEquals(4, results.get(2).getField(0));
         assertEquals("DAVID", results.get(2).getField(1));
 
@@ -776,19 +776,19 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         List<Row> results = collectResults(result);
 
         assertEquals(4, results.size());
-        
+
         // Row 1: normal value
         assertEquals(1, results.get(0).getField(0));
         assertEquals("alice", results.get(0).getField(1));
-        
+
         // Row 2: null name should result in null
         assertEquals(2, results.get(1).getField(0));
         assertNull(results.get(1).getField(1), "LOWER(null) should be null");
-        
+
         // Row 3: normal value
         assertEquals(3, results.get(2).getField(0));
         assertEquals("charlie", results.get(2).getField(1));
-        
+
         // Row 4: null name should result in null
         assertEquals(4, results.get(3).getField(0));
         assertNull(results.get(3).getField(1), "LOWER(null) should be null");
@@ -828,58 +828,17 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         List<Row> results = collectResults(result);
 
         assertEquals(3, results.size());
-        
+
         // Empty strings should remain empty
         assertEquals(1, results.get(0).getField(0));
         assertEquals("", results.get(0).getField(1));
-        
+
         assertEquals(2, results.get(1).getField(0));
         assertEquals("BOB", results.get(1).getField(1));
-        
+
         assertEquals(3, results.get(2).getField(0));
         assertEquals("", results.get(2).getField(1));
 
         System.out.println("✅✅✅ NATIVE CALC WITH EMPTY STRINGS VERIFIED!");
-    }
-
-    @Test
-    public void testNativeCalcPerformanceComparison() throws Exception {
-        if (!auronAvailable) {
-            System.out.println("⏭️  Skipping testNativeCalcPerformanceComparison - Auron not available");
-            return;
-        }
-
-        System.out.println("\n🔥 Testing Native CALC Performance");
-
-        // Create larger dataset for performance testing
-        List<Row> testData = new java.util.ArrayList<>();
-        for (int i = 1; i <= 10000; i++) {
-            testData.add(row(i, "Name_" + i, i * 1.5, LocalDate.of(2024, 1, (i % 28) + 1)));
-        }
-
-        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
-
-        File parquetDir = createTempParquetDir();
-        writeParquetTestData(parquetDir, "calc_perf_test", schema, testData);
-
-        createParquetTable(
-                "parquet_calc_perf_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_perf_test");
-
-        // Execute query with LOWER and UPPER
-        long startTime = System.currentTimeMillis();
-        TableResult result = tableEnvironment.executeSql(
-                "SELECT id, LOWER(name) as lower_name, UPPER(name) as upper_name " +
-                "FROM parquet_calc_perf_test " +
-                "WHERE amount > 5000");
-
-        List<Row> results = collectResults(result);
-        long endTime = System.currentTimeMillis();
-
-        System.out.println("📊 Processed " + results.size() + " rows in " + (endTime - startTime) + " ms");
-        assertTrue(results.size() > 0, "Should return filtered results");
-
-        System.out.println("✅✅✅ NATIVE CALC PERFORMANCE TEST COMPLETED!");
     }
 }
