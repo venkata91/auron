@@ -553,4 +553,4 @@ taskmanager.memory.managed.size: 1024m
 
 - For deployment to production clusters: [FLINK-DEPLOYMENT.md](FLINK-DEPLOYMENT.md)
 - For building and testing: [BUILD-GUIDE.md](BUILD-GUIDE.md)
-- For quick examples: [QUICKSTART-FLINK.md](QUICKSTART-FLINK.md)
+- For quick examples: [BUILD-GUIDE.md](BUILD-GUIDE.md)

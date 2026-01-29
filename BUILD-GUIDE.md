@@ -389,7 +389,7 @@ cd /Users/vsowrira/git/auron
 
 ## Additional Resources
 
-- **Quick Start Guide**: See [QUICKSTART-FLINK.md](QUICKSTART-FLINK.md)
+- **Quick Start Guide**: See [FLINK-SQL-QUICKSTART.md](FLINK-SQL-QUICKSTART.md)
 - **Flink Integration Details**: See `/Users/vsowrira/git/flink/AURON_INTEGRATION_1.18.md`
 - **Development Guidelines**: See [CLAUDE.md](CLAUDE.md)
 - **Main README**: See [README.md](README.md)

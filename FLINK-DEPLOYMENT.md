@@ -288,5 +288,5 @@ Before deploying to Flink cluster:
 ## References
 
 - **Build Guide**: [BUILD-GUIDE.md](BUILD-GUIDE.md)
-- **Quick Start**: [QUICKSTART-FLINK.md](QUICKSTART-FLINK.md)
+- **Quick Start**: [FLINK-SQL-QUICKSTART.md](FLINK-SQL-QUICKSTART.md)
 - **Flink Integration Details**: `/Users/vsowrira/git/flink/AURON_INTEGRATION_1.18.md`
