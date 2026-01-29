@@ -97,6 +97,151 @@ spark.executor.memoryOverhead 4096
 spark-sql -f tpcds/q01.sql
 ```
 
+## Run Flink Tests with Auron
+
+Auron also supports Apache Flink integration. This section describes how to run tests and examples with Auron-accelerated Flink execution.
+
+**For comprehensive build instructions** (including building Flink with Auron integration), see [BUILD-GUIDE.md](BUILD-GUIDE.md).
+
+### Prerequisites
+
+**Java 17** is required for building and running Flink tests:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk17.0.5-msft.jdk/Contents/Home
+```
+
+While Auron compiles to Java 8 bytecode for compatibility, Maven plugins (especially spotless) and Apache Arrow require Java 11+. Java 17 is recommended for all development work.
+
+### Building - Complete Stack
+
+To build both Flink (with Auron integration) and Auron:
+
+```bash
+# Build everything with one command (recommended for first time)
+./build-all.sh
+
+# Fast build (skip tests)
+./build-all.sh --skip-tests
+
+# Build only Auron (assumes Flink already built)
+./build-all.sh --auron-only
+```
+
+See [BUILD-GUIDE.md](BUILD-GUIDE.md) for complete details.
+
+### Building - Auron Only
+
+If Flink 1.18-SNAPSHOT is already built, use the Auron-only build script:
+
+```bash
+./build-flink.sh          # Build and install (skip tests)
+./build-flink.sh clean    # Clean build from scratch
+./build-flink.sh test     # Build and run tests
+```
+
+Or manually with Maven:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk17.0.5-msft.jdk/Contents/Home
+./build/apache-maven-3.9.12/bin/mvn clean install -DskipTests \
+  -Pflink-1.18 -Pscala-2.12
+```
+
+### Running Tests
+
+#### Quick Test Execution (Recommended)
+
+Use the simplified example runner:
+
+```bash
+cd auron-flink-extension/auron-flink-planner
+
+./run-example.sh groupby   # GROUP BY with hybrid execution (default)
+./run-example.sh parallel  # 50K rows with parallelism=4
+./run-example.sh mvp       # MVP example with parallelism=1
+```
+
+**What these tests demonstrate:**
+- `groupby`: Auron native ParquetScan + Flink GROUP BY aggregations (hybrid execution)
+- `parallel`: Distributed file splitting across 4 parallel tasks
+- `mvp`: Basic Auron integration with multiple query types
+
+**Performance**: First run copies dependencies (~30 seconds), subsequent runs start immediately.
+
+#### Integration Tests
+
+For comprehensive integration tests:
+
+```bash
+cd auron-flink-extension/auron-flink-planner
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk17.0.5-msft.jdk/Contents/Home
+
+# Run execution verification test (shows Auron conversion logs)
+./run-e2e-test-final.sh
+
+# Or explicitly specify test type
+./run-e2e-test-final.sh Execution  # AuronExecutionVerificationTest (default)
+./run-e2e-test-final.sh Simple     # AuronSimpleVerificationTest
+./run-e2e-test-final.sh Manual     # AuronEndToEndManualTest
+```
+
+#### Option 2: Maven Test
+
+Run tests using Maven from the Auron root directory:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk17.0.5-msft.jdk/Contents/Home
+./build/apache-maven-3.9.12/bin/mvn test \
+  -pl auron-flink-extension/auron-flink-planner -am \
+  -Dtest=AuronExecutionVerificationTest \
+  -Pflink-1.18 -Pscala-2.12
+```
+
+Replace `AuronExecutionVerificationTest` with other test class names as needed.
+
+#### Option 3: Direct Java Execution
+
+For advanced users who want full control:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk17.0.5-msft.jdk/Contents/Home
+
+CLASSPATH="auron-flink-extension/auron-flink-planner/target/test-classes:auron-flink-extension/auron-flink-planner/target/classes:auron-flink-extension/auron-flink-planner/target/lib/*" \
+  $JAVA_HOME/bin/java --add-opens=java.base/java.nio=ALL-UNNAMED \
+  org.apache.auron.flink.examples.AuronFlinkGroupByTest
+```
+
+Available test classes:
+- `AuronFlinkGroupByTest` - GROUP BY hybrid execution
+- `AuronFlinkParallelTest` - 50K rows, parallelism=4
+- `AuronFlinkMVPWorkingExample` - MVP with multiple queries
+
+### Expected Output
+
+When tests run successfully with Auron, you should see log messages indicating native execution:
+
+```
+------ initializing auron native environment ------
+[INFO] [auron::exec:70] - initializing JNI bridge
+[INFO] [auron_jni_bridge::jni_bridge:491] - ==> FLINK MODE: Spark/Scala classes will be skipped
+[INFO] [auron::rt:147] - start executing plan:
+ParquetExec: limit=None, file_group=[...]
+[INFO] [datafusion_datasource_parquet::opener:421] - executing parquet scan with adaptive batch size: 8192
+[INFO] [auron::rt:188] - task finished
+✅ All queries executed successfully with Auron!
+```
+
+### Troubleshooting
+
+**Architecture Mismatch Error**: If you see `mach-o file, but is an incompatible architecture`, ensure you're using the correct Java architecture (ARM64 for Apple Silicon, x86_64 for Intel).
+
+**Arrow Memory Error**: If you see `Failed to initialize MemoryUtil`, ensure you're using the `--add-opens=java.base/java.nio=ALL-UNNAMED` JVM flag when running with Java 17+.
+
+**Dependency Resolution Error**: If Maven can't resolve `auron-flink-extension`, always run Maven commands from the Auron root directory and use the `-am` flag to build dependencies from the reactor.
+
+For more details, see [CLAUDE.md](CLAUDE.md).
+
 ## Performance
 
 TPC-DS 1TB Benchmark Results:
