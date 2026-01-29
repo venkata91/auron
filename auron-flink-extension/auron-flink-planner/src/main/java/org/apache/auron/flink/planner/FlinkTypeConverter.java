@@ -95,6 +95,35 @@ public class FlinkTypeConverter {
         }
     }
 
+    // Add to FlinkTypeConverter.java (or create if it doesn't exist)
+
+    public static LogicalType fromCalciteType(org.apache.calcite.rel.type.RelDataType calciteType) {
+        switch (calciteType.getSqlTypeName()) {
+            case BOOLEAN:
+                return new BooleanType();
+            case INTEGER:
+                return new IntType();
+            case BIGINT:
+                return new BigIntType();
+            case FLOAT:
+                return new FloatType();
+            case DOUBLE:
+                return new DoubleType();
+            case CHAR:
+                return new CharType(calciteType.getPrecision());
+            case VARCHAR:
+                return new VarCharType(calciteType.getPrecision());
+            case DATE:
+                return new DateType();
+            case TIMESTAMP:
+            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                return new TimestampType(calciteType.getPrecision());
+            default:
+                throw new UnsupportedOperationException(
+                    "Unsupported Calcite type: " + calciteType.getSqlTypeName());
+        }
+    }
+
     /**
      * Checks if a Flink LogicalType is supported by Auron.
      *

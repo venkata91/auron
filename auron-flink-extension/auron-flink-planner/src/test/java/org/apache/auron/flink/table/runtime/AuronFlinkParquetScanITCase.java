@@ -535,4 +535,310 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
             fail("Native projection should succeed: " + e.getMessage());
         }
     }
+
+    // ==================== CALC FUNCTION TESTS ====================
+
+    @Test
+    public void testNativeCalcLowerFunction() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcLowerFunction - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC - LOWER() Function");
+
+        // Create test data with mixed case strings
+        List<Row> testData = Arrays.asList(
+                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+                row(2, "BOB", 200.5, LocalDate.of(2024, 1, 2)),
+                row(3, "ChArLiE", 300.5, LocalDate.of(2024, 1, 3)),
+                row(4, "DAVID", 400.5, LocalDate.of(2024, 1, 4)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_lower_test", schema, testData);
+
+        // Create table
+        createParquetTable(
+                "parquet_calc_lower_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_lower_test");
+
+        // Execute query with LOWER function
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, LOWER(name) as lower_name FROM parquet_calc_lower_test ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        // Verify results
+        assertEquals(4, results.size(), "Should return 4 rows");
+
+        // Verify LOWER() worked correctly
+        assertEquals(1, results.get(0).getField(0));
+        assertEquals("alice", results.get(0).getField(1));
+
+        assertEquals(2, results.get(1).getField(0));
+        assertEquals("bob", results.get(1).getField(1));
+
+        assertEquals(3, results.get(2).getField(0));
+        assertEquals("charlie", results.get(2).getField(1));
+
+        assertEquals(4, results.get(3).getField(0));
+        assertEquals("david", results.get(3).getField(1));
+
+        System.out.println("✅✅✅ NATIVE CALC LOWER() VERIFIED!");
+        System.out.println("🎉 String function executed in Auron native engine!");
+    }
+
+    @Test
+    public void testNativeCalcUpperFunction() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcUpperFunction - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC - UPPER() Function");
+
+        // Create test data with lowercase strings
+        List<Row> testData = Arrays.asList(
+                row(1, "alice", 100.5, LocalDate.of(2024, 1, 1)),
+                row(2, "bob", 200.5, LocalDate.of(2024, 1, 2)),
+                row(3, "charlie", 300.5, LocalDate.of(2024, 1, 3)),
+                row(4, "david", 400.5, LocalDate.of(2024, 1, 4)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        // Write Parquet test data
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_upper_test", schema, testData);
+
+        // Create table
+        createParquetTable(
+                "parquet_calc_upper_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_upper_test");
+
+        // Execute query with UPPER function
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, UPPER(name) as upper_name FROM parquet_calc_upper_test ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        // Verify results
+        assertEquals(4, results.size(), "Should return 4 rows");
+
+        // Verify UPPER() worked correctly
+        assertEquals(1, results.get(0).getField(0));
+        assertEquals("ALICE", results.get(0).getField(1));
+
+        assertEquals(2, results.get(1).getField(0));
+        assertEquals("BOB", results.get(1).getField(1));
+
+        assertEquals(3, results.get(2).getField(0));
+        assertEquals("CHARLIE", results.get(2).getField(1));
+
+        assertEquals(4, results.get(3).getField(0));
+        assertEquals("DAVID", results.get(3).getField(1));
+
+        System.out.println("✅✅✅ NATIVE CALC UPPER() VERIFIED!");
+        System.out.println("🎉 String function executed in Auron native engine!");
+    }
+
+    @Test
+    public void testNativeCalcLowerUpperCombined() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcLowerUpperCombined - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC - LOWER() and UPPER() Combined");
+
+        // Create test data
+        List<Row> testData = Arrays.asList(
+                row(1, "Alice", 100.5, LocalDate.of(2024, 1, 1)),
+                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+                row(3, "Charlie", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_combined_test", schema, testData);
+
+        createParquetTable(
+                "parquet_calc_combined_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_combined_test");
+
+        // Execute query with both LOWER and UPPER
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, LOWER(name) as lower_name, UPPER(name) as upper_name " +
+                "FROM parquet_calc_combined_test ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        // Verify results
+        assertEquals(3, results.size());
+
+        assertEquals(1, results.get(0).getField(0));
+        assertEquals("alice", results.get(0).getField(1));
+        assertEquals("ALICE", results.get(0).getField(2));
+
+        assertEquals(2, results.get(1).getField(0));
+        assertEquals("bob", results.get(1).getField(1));
+        assertEquals("BOB", results.get(1).getField(2));
+
+        System.out.println("✅✅✅ NATIVE CALC COMBINED FUNCTIONS VERIFIED!");
+    }
+
+    @Test
+    public void testNativeCalcWithFilter() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcWithFilter - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC with Filter Pushdown");
+
+        // Create test data
+        List<Row> testData = Arrays.asList(
+                row(1, "Alice", 50.0, LocalDate.of(2024, 1, 1)),
+                row(2, "Bob", 150.0, LocalDate.of(2024, 1, 2)),
+                row(3, "Charlie", 250.0, LocalDate.of(2024, 1, 3)),
+                row(4, "David", 350.0, LocalDate.of(2024, 1, 4)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_filter_test", schema, testData);
+
+        createParquetTable(
+                "parquet_calc_filter_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_filter_test");
+
+        // Execute query: UPPER(name) with filter
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, UPPER(name) as upper_name, amount " +
+                "FROM parquet_calc_filter_test " +
+                "WHERE amount > 100 " +
+                "ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        // Should only return rows where amount > 100
+        assertEquals(3, results.size(), "Should return 3 rows (filtered)");
+
+        assertEquals(2, results.get(0).getField(0));
+        assertEquals("BOB", results.get(0).getField(1));
+        assertEquals(150.0, results.get(0).getField(2));
+
+        assertEquals(3, results.get(1).getField(0));
+        assertEquals("CHARLIE", results.get(1).getField(1));
+
+        assertEquals(4, results.get(2).getField(0));
+        assertEquals("DAVID", results.get(2).getField(1));
+
+        System.out.println("✅✅✅ NATIVE CALC WITH FILTER VERIFIED!");
+    }
+
+    @Test
+    public void testNativeCalcWithNullValues() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcWithNullValues - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC with NULL Values");
+
+        // Create test data with nulls
+        List<Row> testData = Arrays.asList(
+                row(1, "Alice", 100.5),
+                row(2, null, 200.5),
+                row(3, "Charlie", null),
+                row(4, null, null));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE" + ")";
+
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_null_test", schema, testData);
+
+        createParquetTable(
+                "parquet_calc_null_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_null_test");
+
+        // Execute query with LOWER on nullable column
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, LOWER(name) as lower_name FROM parquet_calc_null_test ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        assertEquals(4, results.size());
+
+        // Row 1: normal value
+        assertEquals(1, results.get(0).getField(0));
+        assertEquals("alice", results.get(0).getField(1));
+
+        // Row 2: null name should result in null
+        assertEquals(2, results.get(1).getField(0));
+        assertNull(results.get(1).getField(1), "LOWER(null) should be null");
+
+        // Row 3: normal value
+        assertEquals(3, results.get(2).getField(0));
+        assertEquals("charlie", results.get(2).getField(1));
+
+        // Row 4: null name should result in null
+        assertEquals(4, results.get(3).getField(0));
+        assertNull(results.get(3).getField(1), "LOWER(null) should be null");
+
+        System.out.println("✅✅✅ NATIVE CALC WITH NULL VALUES VERIFIED!");
+    }
+
+    @Test
+    public void testNativeCalcWithEmptyStrings() throws Exception {
+        if (!auronAvailable) {
+            System.out.println("⏭️  Skipping testNativeCalcWithEmptyStrings - Auron not available");
+            return;
+        }
+
+        System.out.println("\n🔥 Testing Native CALC with Empty Strings");
+
+        // Create test data with empty strings
+        List<Row> testData = Arrays.asList(
+                row(1, "", 100.5, LocalDate.of(2024, 1, 1)),
+                row(2, "Bob", 200.5, LocalDate.of(2024, 1, 2)),
+                row(3, "", 300.5, LocalDate.of(2024, 1, 3)));
+
+        String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE," + "  created_date DATE" + ")";
+
+        File parquetDir = createTempParquetDir();
+        writeParquetTestData(parquetDir, "calc_empty_test", schema, testData);
+
+        createParquetTable(
+                "parquet_calc_empty_test",
+                schema,
+                "file://" + parquetDir.getAbsolutePath() + "/calc_empty_test");
+
+        // Execute query
+        TableResult result = tableEnvironment.executeSql(
+                "SELECT id, UPPER(name) as upper_name FROM parquet_calc_empty_test ORDER BY id");
+
+        List<Row> results = collectResults(result);
+
+        assertEquals(3, results.size());
+
+        // Empty strings should remain empty
+        assertEquals(1, results.get(0).getField(0));
+        assertEquals("", results.get(0).getField(1));
+
+        assertEquals(2, results.get(1).getField(0));
+        assertEquals("BOB", results.get(1).getField(1));
+
+        assertEquals(3, results.get(2).getField(0));
+        assertEquals("", results.get(2).getField(1));
+
+        System.out.println("✅✅✅ NATIVE CALC WITH EMPTY STRINGS VERIFIED!");
+    }
 }

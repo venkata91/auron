@@ -52,6 +52,10 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.util.NlsString;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.auron.protobuf.PhysicalScalarFunctionNode;
+import org.apache.auron.protobuf.ScalarFunction;
+import org.apache.calcite.sql.SqlOperator;
+import java.util.ArrayList;
 
 /**
  * Converter for Calcite RexNode expressions to Auron PhysicalExprNode protobuf.
@@ -177,7 +181,10 @@ public class FlinkExpressionConverter {
                 return buildShortCircuitOr(operands.get(0), operands.get(1), inputFieldNames);
             case NOT:
                 return buildNot(operands.get(0), inputFieldNames);
-
+            case OTHER_FUNCTION:
+            case OTHER:
+                // Handle scalar functions (LOWER, UPPER, etc.)
+                return convertScalarFunction(call, inputFieldNames);
             default:
                 throw new UnsupportedOperationException("Unsupported operator: " + kind + " in call: " + call);
         }
@@ -219,6 +226,73 @@ public class FlinkExpressionConverter {
                 .build();
 
         return PhysicalExprNode.newBuilder().setScOrExpr(orExpr).build();
+    }
+
+    /**
+     * Converts scalar function calls (LOWER, UPPER, TRIM, etc.) to PhysicalScalarFunctionNode.
+     */
+    private static PhysicalExprNode convertScalarFunction(RexCall call, List<String> inputFieldNames) {
+        SqlOperator operator = call.getOperator();
+        String functionName = operator.getName();
+
+        // Map Flink/Calcite function names to Auron ScalarFunction enum
+        ScalarFunction scalarFunc = mapToScalarFunction(functionName);
+
+        // Convert arguments
+        List<PhysicalExprNode> args = new ArrayList<>();
+        for (RexNode operand : call.getOperands()) {
+            args.add(convertRexNode(operand, inputFieldNames));
+        }
+
+        // Get return type
+        org.apache.auron.protobuf.ArrowType returnType =
+            FlinkTypeConverter.toArrowType(
+                FlinkTypeConverter.fromCalciteType(call.getType())
+            );
+
+        // Build scalar function node
+        PhysicalScalarFunctionNode scalarFuncNode = PhysicalScalarFunctionNode.newBuilder()
+            .setName(functionName)
+            .setFun(scalarFunc)
+            .addAllArgs(args)
+            .setReturnType(returnType)
+            .build();
+
+        return PhysicalExprNode.newBuilder()
+            .setScalarFunction(scalarFuncNode)
+            .build();
+    }
+
+    /**
+     * Maps Flink/Calcite function names to Auron ScalarFunction enum values.
+     */
+    private static ScalarFunction mapToScalarFunction(String functionName) {
+        // Normalize to uppercase for comparison
+        String normalized = functionName.toUpperCase();
+
+        switch (normalized) {
+            // String functions
+            case "LOWER":
+                return ScalarFunction.Lower;
+            case "UPPER":
+                return ScalarFunction.Upper;
+            case "TRIM":
+                return ScalarFunction.Trim;
+            case "LTRIM":
+                return ScalarFunction.Ltrim;
+            case "RTRIM":
+                return ScalarFunction.Rtrim;
+            case "SUBSTRING":
+            case "SUBSTR":
+                return ScalarFunction.Substr;
+            case "CONCAT":
+                return ScalarFunction.Concat;
+            case "REPLACE":
+                return ScalarFunction.Replace;
+            default:
+                throw new UnsupportedOperationException(
+                    "Unsupported scalar function: " + functionName);
+        }
     }
 
     /**
