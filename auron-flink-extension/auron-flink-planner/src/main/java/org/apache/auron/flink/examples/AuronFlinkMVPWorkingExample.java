@@ -22,41 +22,54 @@ import org.apache.flink.table.api.TableResult;
 
 /**
  * Working example of Auron native execution in Flink with parallelism=1.
- * This creates test data, then runs queries with Auron enabled.
+ * This creates test data on HDFS, then runs queries with Auron enabled.
  */
 public class AuronFlinkMVPWorkingExample {
 
     public static void main(String[] args) throws Exception {
-        String separator = repeatString("=", 80);
-        System.out.println("\n" + separator);
-        System.out.println("Flink-Auron MVP Working Example (parallelism=1)");
-        System.out.println(separator);
-        System.out.println("\nThis demonstrates Auron native execution with actual test data.\n");
+        try {
+            String separator = repeatString("=", 80);
+            System.out.println("\n" + separator);
+            System.out.println("Flink-Auron MVP Working Example (HDFS)");
+            System.out.println(separator);
+            System.out.println("\nThis demonstrates Auron native execution with actual test data on HDFS.\n");
 
-        // Step 1: Create test data
-        String testDataPath = createTestParquetData();
-        System.out.println("✅ Test data created at: " + testDataPath);
-        System.out.println("");
+            // Step 1: Create test data on HDFS
+            String hdfsBaseDir = "hdfs:///user/jifan/tmp/auron_data/";
+            if (args.length > 0) {
+                hdfsBaseDir = args[0];
+            }
 
-        // Step 2: Run queries with Auron enabled
-        System.out.println(separator);
-        System.out.println("EXECUTING QUERIES WITH AURON (parallelism=1)");
-        System.out.println(separator + "\n");
+            if (!hdfsBaseDir.endsWith("/")) {
+                hdfsBaseDir += "/";
+            }
+            String testDataPath = hdfsBaseDir + "test_" + System.currentTimeMillis();
 
-        runQueriesWithAuron(testDataPath);
+            System.out.println("🚀 Creating test data at: " + testDataPath);
+            createTestParquetData(testDataPath);
+            System.out.println("✅ Test data created successfully.");
+            System.out.println("");
 
-        // Cleanup
-        cleanupTestData(testDataPath);
+            // Step 2: Run queries with Auron enabled
+            System.out.println(separator);
+            System.out.println("EXECUTING QUERIES WITH AURON");
+            System.out.println(separator + "\n");
 
-        System.out.println("\n" + separator);
-        System.out.println("✅ Auron MVP Example Completed Successfully!");
-        System.out.println(separator + "\n");
+            runQueriesWithAuron(testDataPath);
+
+            System.out.println("\n" + separator);
+            System.out.println("✅ Auron MVP Example Completed Successfully!");
+            System.out.println("NOTE: Test data remains at: " + testDataPath);
+            System.out.println("You can clean it up manually using: hdfs dfs -rm -r " + testDataPath);
+            System.out.println(separator + "\n");
+        } catch (Throwable t) {
+            System.err.println("❌ Auron MVP Example Failed with Exception: " + t.getMessage());
+            t.printStackTrace();
+            System.exit(1);
+        }
     }
 
-    private static String createTestParquetData() throws Exception {
-        System.out.println("Creating test Parquet data...");
-        String testDataPath = "/tmp/auron_mvp_example_" + System.currentTimeMillis();
-
+    private static void createTestParquetData(String testDataPath) throws Exception {
         EnvironmentSettings settings =
                 EnvironmentSettings.newInstance().inBatchMode().build();
         TableEnvironment tEnv = TableEnvironment.create(settings);
@@ -78,7 +91,7 @@ public class AuronFlinkMVPWorkingExample {
                 + "  'fields.amount.max' = '500.0'"
                 + ")");
 
-        // Create Parquet sink
+        // Create Parquet sink pointing to HDFS
         tEnv.executeSql("CREATE TABLE test_sink ("
                 + "  id BIGINT,"
                 + "  name STRING,"
@@ -92,8 +105,6 @@ public class AuronFlinkMVPWorkingExample {
 
         // Write data
         tEnv.executeSql("INSERT INTO test_sink SELECT * FROM test_source").await();
-
-        return testDataPath;
     }
 
     private static void runQueriesWithAuron(String dataPath) throws Exception {
@@ -104,7 +115,7 @@ public class AuronFlinkMVPWorkingExample {
         // Enable Auron
         tEnv.getConfig().getConfiguration().setBoolean("table.optimizer.auron.enabled", true);
 
-        // Set parallelism to 1
+        // Set parallelism to 1 for this example
         tEnv.getConfig().getConfiguration().setInteger("table.exec.resource.default-parallelism", 1);
 
         System.out.println("Configuration:");
@@ -113,7 +124,7 @@ public class AuronFlinkMVPWorkingExample {
         System.out.println("  table.exec.resource.default-parallelism = 1");
         System.out.println("");
 
-        // Create table pointing to test data
+        // Create table pointing to test data on HDFS
         tEnv.executeSql("CREATE TABLE sales ("
                 + "  id BIGINT,"
                 + "  name STRING,"
@@ -158,30 +169,6 @@ public class AuronFlinkMVPWorkingExample {
         System.out.println("");
 
         System.out.println("✅ All queries executed successfully with Auron!");
-    }
-
-    private static void cleanupTestData(String path) {
-        java.io.File dir = new java.io.File(path);
-        if (dir.exists()) {
-            deleteDirectory(dir);
-            System.out.println("✅ Test data cleaned up: " + path);
-        }
-    }
-
-    private static void deleteDirectory(java.io.File directory) {
-        if (directory.exists()) {
-            java.io.File[] files = directory.listFiles();
-            if (files != null) {
-                for (java.io.File file : files) {
-                    if (file.isDirectory()) {
-                        deleteDirectory(file);
-                    } else {
-                        file.delete();
-                    }
-                }
-            }
-            directory.delete();
-        }
     }
 
     private static String repeatString(String str, int count) {

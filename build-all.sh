@@ -279,7 +279,7 @@ if [ "$BUILD_AURON" = true ]; then
     # Copy libauron.so from Docker build to native-engine/_build/release/
     echo ""
     echo -e "${BLUE}Copying libauron.so from Docker build...${NC}"
-    DOCKER_LIBAURON="target-docker/native-engine/_build/release/libauron.so"
+    DOCKER_LIBAURON="target-docker/native-engine/release/libauron.so"
     if [ -f "$DOCKER_LIBAURON" ]; then
       mkdir -p native-engine/_build/release/
       cp -f "$DOCKER_LIBAURON" native-engine/_build/release/libauron.so
@@ -287,6 +287,8 @@ if [ "$BUILD_AURON" = true ]; then
       file native-engine/_build/release/libauron.so
     else
       echo -e "${RED}❌ libauron.so not found in Docker build output${NC}"
+      echo -e "${YELLOW}Searching for libauron.so in target-docker...${NC}"
+      find target-docker -name "libauron.so" 2>/dev/null
       exit 1
     fi
 

@@ -54,6 +54,9 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 public class AuronFlinkMVPExample {
 
     public static void main(String[] args) throws Exception {
+        // Parse Parquet path
+        String parquetPath = (args.length > 0) ? args[0] : "hdfs:///user/jifan/tmp/auron/sample_data";
+
         // Step 1: Setup Flink environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         Configuration config = new Configuration();
@@ -81,16 +84,20 @@ public class AuronFlinkMVPExample {
         StreamTableEnvironment tEnv = StreamTableEnvironment.create(env, settings);
 
         // Step 5: Create Parquet table
-        tEnv.executeSql("CREATE TABLE parquet_table ("
-                + "  id BIGINT,"
-                + "  name STRING,"
-                + "  value DOUBLE,"
-                + "  created_date DATE"
-                + ") WITH ("
-                + "  'connector' = 'filesystem',"
-                + "  'path' = 'file:///path/to/parquet/files'," // Update with actual path
-                + "  'format' = 'parquet'"
-                + ")");
+        String createTableSql = String.format(
+                "CREATE TABLE parquet_table ("
+                        + "  id BIGINT,"
+                        + "  name STRING,"
+                        + "  value DOUBLE,"
+                        + "  created_date DATE"
+                        + ") WITH ("
+                        + "  'connector' = 'filesystem',"
+                        + "  'path' = '%s',"
+                        + "  'format' = 'parquet'"
+                        + ")",
+                parquetPath);
+        System.out.println("Executing SQL: " + createTableSql);
+        tEnv.executeSql(createTableSql);
 
         // Step 6: Execute queries
 

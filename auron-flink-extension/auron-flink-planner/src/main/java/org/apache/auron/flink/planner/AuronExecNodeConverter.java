@@ -20,6 +20,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.auron.protobuf.PhysicalPlanNode;
 import org.apache.calcite.rex.RexNode;
+import org.apache.flink.core.fs.FileStatus;
+import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.catalog.ContextResolvedTable;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecCalc;
@@ -206,6 +209,7 @@ public class AuronExecNodeConverter {
      *
      * <p>This method extracts file paths from the table metadata.
      * If the path is a directory, it scans for actual Parquet files.
+     * Uses Flink FileSystem API to support both Local and HDFS paths.
      *
      * @param resolvedTable The resolved table metadata
      * @return List of file paths
@@ -214,42 +218,50 @@ public class AuronExecNodeConverter {
         List<String> filePaths = new ArrayList<>();
 
         try {
-            // Get the path from table options (standard way for filesystem connector tables)
+            // Get the path from table options
             if (resolvedTable.getResolvedTable().getOptions().containsKey("path")) {
-                String basePath = resolvedTable.getResolvedTable().getOptions().get("path");
-                LOG.debug("Extracted path from table options: {}", basePath);
+                String basePathString =
+                        resolvedTable.getResolvedTable().getOptions().get("path");
+                LOG.info("Extracted path from table options: {}", basePathString);
 
-                // Check if this is a directory and scan for Parquet files
-                java.io.File baseFile = new java.io.File(basePath);
-                if (baseFile.isDirectory()) {
-                    LOG.debug("Path is a directory, scanning for Parquet files...");
-                    java.io.File[] files =
-                            baseFile.listFiles((dir, name) -> name.endsWith(".parquet") || name.startsWith("part-"));
+                Path path = new Path(basePathString);
+                FileSystem fs = path.getFileSystem();
 
-                    if (files != null && files.length > 0) {
-                        for (java.io.File file : files) {
-                            if (file.isFile()) {
-                                filePaths.add(file.getAbsolutePath());
-                                LOG.debug("Found Parquet file: {}", file.getAbsolutePath());
+                if (fs.exists(path)) {
+                    FileStatus status = fs.getFileStatus(path);
+                    if (status.isDir()) {
+                        LOG.debug("Path is a directory, scanning for Parquet files via FileSystem API...");
+                        FileStatus[] listStatus = fs.listStatus(path);
+                        if (listStatus != null) {
+                            for (FileStatus fileStatus : listStatus) {
+                                if (!fileStatus.isDir()) {
+                                    String fileName = fileStatus.getPath().getName();
+                                    // Match parquet files or Flink part files
+                                    if (fileName.endsWith(".parquet") || fileName.contains("part-")) {
+                                        filePaths.add(fileStatus.getPath().toString());
+                                        LOG.debug(
+                                                "Found file: {}",
+                                                fileStatus.getPath().toString());
+                                    }
+                                }
                             }
                         }
                     } else {
-                        LOG.warn("No Parquet files found in directory: {}", basePath);
-                        // Still add the directory path as fallback
-                        filePaths.add(basePath);
+                        // Single file path
+                        filePaths.add(basePathString);
                     }
-                } else if (baseFile.isFile()) {
-                    // Single file
-                    filePaths.add(basePath);
                 } else {
-                    // Path doesn't exist yet or is remote - add as-is
-                    filePaths.add(basePath);
+                    // Path doesn't exist yet (common during initial INSERT), pass as-is
+                    LOG.warn("Path does not exist, passing original path: {}", basePathString);
+                    filePaths.add(basePathString);
                 }
             }
 
             if (filePaths.isEmpty()) {
-                throw new IllegalStateException("Could not extract file paths from table source. "
-                        + "Make sure the table is a filesystem table with 'path' option.");
+                LOG.info("Resolved table options: {}", resolvedTable.getResolvedTable().getOptions());
+                throw new IllegalStateException(
+                        "Could not extract file paths from table source. " + "Check if the path exists: "
+                                + resolvedTable.getResolvedTable().getOptions().get("path"));
             }
 
         } catch (Exception e) {
