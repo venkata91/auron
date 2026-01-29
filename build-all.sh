@@ -263,7 +263,7 @@ if [ "$BUILD_AURON" = true ]; then
     # Set environment variables for Docker Compose
     export DOCKER_DEFAULT_PLATFORM=linux/amd64
     export BUILD_CONTEXT="./${DOCKER_IMAGE}"
-    export AURON_BUILD_ARGS="$MAVEN_PHASE -DskipTests -Dmaven.test.skip=true -pl auron-flink-extension/auron-flink-assembly -am -Pflink-1.18 -Pscala-2.12 -T8"
+    export AURON_BUILD_ARGS="$MAVEN_PHASE -DskipTests -Dmaven.test.skip=true -pl auron-flink-extension/auron-flink-assembly -am -Pflink-1.18 -Pflink -Pscala-2.12 -T8"
 
     echo -e "${BLUE}Docker build arguments: $AURON_BUILD_ARGS${NC}"
     echo ""

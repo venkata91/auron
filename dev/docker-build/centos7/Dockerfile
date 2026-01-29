@@ -40,6 +40,8 @@ RUN echo '. /opt/rh/devtoolset-11/enable' >> ~/.bashrc
 RUN curl https://sh.rustup.rs > /rustup-init
 RUN chmod +x /rustup-init
 RUN /rustup-init -y --default-toolchain nightly-2025-05-09-x86_64-unknown-linux-gnu
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup target add x86_64-unknown-linux-gnu
 
 # install java
 RUN echo "Installing Java 17 (Cache Buster)" && \

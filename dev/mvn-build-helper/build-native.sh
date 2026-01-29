@@ -31,7 +31,7 @@ if [ -n "$2" ]; then
     features_arg="--features $2"
 fi
 
-echo "Building with profile: $profile"
+echo "Building with profile: $profile and feature: ${features_arg:-<none>}"
 
 # Support cross-compilation via CARGO_BUILD_TARGET environment variable
 # Example: CARGO_BUILD_TARGET=x86_64-apple-darwin mvn package
@@ -114,6 +114,8 @@ if [ ! -f "$cache_libpath" ] || [ "$new_checksum" != "$old_checksum" ]; then
     cargo fmt --all -q -- 2>&1
 
     echo "Building native with [$profile] profile${target_arg:+ for target $CARGO_BUILD_TARGET}..."
+    # print whole cargo commands
+    echo "Running: cargo build --profile=$profile $target_arg $features_arg --verbose --locked --frozen"
     cargo build --profile="$profile" $target_arg $features_arg --verbose --locked --frozen 2>&1
 
     mkdir -p "$cache_dir"
