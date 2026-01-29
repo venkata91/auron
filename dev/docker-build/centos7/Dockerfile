@@ -40,7 +40,25 @@ RUN echo '. /opt/rh/devtoolset-11/enable' >> ~/.bashrc
 RUN curl https://sh.rustup.rs > /rustup-init
 RUN chmod +x /rustup-init
 RUN /rustup-init -y --default-toolchain nightly-2025-05-09-x86_64-unknown-linux-gnu
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup target add x86_64-unknown-linux-gnu
 
 # install java
-RUN yum install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel
-RUN echo 'export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk"' >> ~/.bashrc
+RUN echo "Installing Java 17 (Cache Buster)" && \
+    curl -L -o /tmp/java17.rpm https://corretto.aws/downloads/latest/amazon-corretto-17-x64-linux-jdk.rpm && \
+    yum localinstall -y /tmp/java17.rpm && \
+    rm /tmp/java17.rpm
+ENV JAVA_HOME="/usr/lib/jvm/java-17-amazon-corretto"
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN echo "export JAVA_HOME=${JAVA_HOME}" >> ~/.bashrc
+RUN echo "export PATH=${JAVA_HOME}/bin:\$PATH" >> ~/.bashrc
+
+ENV RUSTFLAGS="-C target-cpu=nehalem"
+RUN echo 'export RUSTFLAGS="-C target-cpu=nehalem"' >> ~/.bashrc
+
+RUN mkdir -p /root/.cargo && \
+    echo '[build]' > /root/.cargo/config && \
+    echo 'rustflags = ["-C", "target-cpu=nehalem"]' >> /root/.cargo/config && \
+    cp /root/.cargo/config /root/.cargo/config.toml
+
+RUN cat /root/.cargo/config

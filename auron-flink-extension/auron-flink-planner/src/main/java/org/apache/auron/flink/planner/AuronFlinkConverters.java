@@ -35,6 +35,7 @@ import org.apache.auron.protobuf.Statistics;
 import org.apache.calcite.rex.RexNode;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.conf.Configuration;
 
 /**
  * Converter for Flink execution plan nodes to Auron PhysicalPlanNode protobuf.
@@ -62,12 +63,13 @@ public class AuronFlinkConverters {
             List<RexNode> predicates,
             int numPartitions,
             int partitionIndex) {
+        Configuration hadoopConf = new Configuration();
 
         // Build the file group
         FileGroup.Builder fileGroupBuilder = FileGroup.newBuilder();
         for (String path : filePaths) {
-            // Get actual file size from filesystem
-            long fileSize = getFileSize(path);
+            // Get actual file size from hadoop
+            long fileSize = getHadoopFileSize(path, hadoopConf);
 
             PartitionedFile partitionedFile = PartitionedFile.newBuilder()
                     .setPath(path)
@@ -312,5 +314,18 @@ public class AuronFlinkConverters {
             System.err.println("Warning: Could not get file size for " + path + ": " + e.getMessage());
         }
         return 0;
+    }
+
+    private static long getHadoopFileSize(String pathStr, Configuration conf) {
+        try {
+            org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(pathStr);
+            org.apache.hadoop.fs.FileSystem fs = path.getFileSystem(conf);
+            if (fs.exists(path)) {
+                return fs.getFileStatus(path).getLen();
+            }
+        } catch (Exception e) {
+            System.err.println("Warning: Could not get HDFS file size for " + pathStr + ": " + e.getMessage());
+        }
+        return getFileSize(pathStr);
     }
 }

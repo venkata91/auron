@@ -482,7 +482,7 @@ if [[ "$USE_DOCKER" == true ]]; then
     echo "[INFO] Compiling inside Docker container..."
     export AURON_BUILD_ARGS="${BUILD_ARGS[*]}"
     export BUILD_CONTEXT="./${IMAGE_NAME}"
-    exec docker-compose -f dev/docker-build/docker-compose.yml up --abort-on-container-exit
+    exec docker compose -f dev/docker-build/docker-compose.yml up --abort-on-container-exit
 else
     echo "[INFO] Compiling locally with maven args: $MVN_CMD ${MVN_ARGS[@]} $@"
     "$MVN_CMD" "${MVN_ARGS[@]}" "$@"
