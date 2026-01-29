@@ -185,21 +185,28 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
 
     /**
      * Processes an Arrow VectorSchemaRoot batch and emits Flink RowData.
+     * OPTIMIZED: Pre-fetch vectors and types to avoid repeated lookups in hot loop.
      */
     private void processBatch(VectorSchemaRoot root, SourceContext<RowData> ctx) {
-        int rowCount = root.getRowCount();
-        int fieldCount = root.getFieldVectors().size();
+        int rowCount = root.getRowCount(); // 1M
+        int fieldCount = root.getFieldVectors().size();// 4
 
         LOG.debug("Processing Arrow batch with {} rows and {} columns", rowCount, fieldCount);
+
+        // OPTIMIZATION: Pre-fetch vectors and types (avoid N*M lookups)
+        FieldVector[] vectors = new FieldVector[fieldCount];
+        LogicalType[] fieldTypes = new LogicalType[fieldCount];
+        for (int colIdx = 0; colIdx < fieldCount; colIdx++) {
+            vectors[colIdx] = root.getVector(colIdx);
+            fieldTypes[colIdx] = outputSchema.getTypeAt(colIdx);
+        }
 
         // Convert each row from Arrow to Flink RowData
         for (int rowIdx = 0; rowIdx < rowCount; rowIdx++) {
             GenericRowData rowData = new GenericRowData(fieldCount);
 
             for (int colIdx = 0; colIdx < fieldCount; colIdx++) {
-                FieldVector vector = root.getVector(colIdx);
-                LogicalType fieldType = outputSchema.getTypeAt(colIdx);
-                Object value = extractValue(vector, rowIdx, fieldType);
+                Object value = extractValue(vectors[colIdx], rowIdx, fieldTypes[colIdx]);
                 rowData.setField(colIdx, value);
             }
 
