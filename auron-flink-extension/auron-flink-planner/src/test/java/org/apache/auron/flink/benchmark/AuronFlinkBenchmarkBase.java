@@ -159,10 +159,11 @@ public class AuronFlinkBenchmarkBase extends AuronFlinkTableTestBase {
     }
 
     /**
-     * Runs a benchmark: executes query with both Flink and Auron, compares results.
+     * Runs a benchmark: executes with both Flink and Auron, then reports comparison.
+     * Returns the metrics for collection.
      */
-    protected void runBenchmark(String benchmarkName, DataScale scale, String sql) {
-        System.out.println("\n🔥 Running: " + benchmarkName + " (" + scale + ")");
+    protected BenchmarkMetrics[] runBenchmark(String benchmarkName, DataScale scale, String sql) {
+        System.out.println("\n Running: " + benchmarkName + " (" + scale + ")");
 
         // Run with Flink
         BenchmarkMetrics flinkMetrics = runWithFlink(sql);
@@ -172,11 +173,15 @@ public class AuronFlinkBenchmarkBase extends AuronFlinkTableTestBase {
 
         // Report results
         BenchmarkReporter.printComparison(benchmarkName, scale, sql, flinkMetrics, auronMetrics);
+        
+        // Return metrics for summary collection
+        return new BenchmarkMetrics[] { flinkMetrics, auronMetrics };
     }
 
     /**
      * Collects all results from a TableResult into a List.
      */
+    @Override
     protected List<Row> collectResults(TableResult result) {
         List<Row> rows = new ArrayList<>();
         try (org.apache.flink.util.CloseableIterator<Row> iterator = result.collect()) {

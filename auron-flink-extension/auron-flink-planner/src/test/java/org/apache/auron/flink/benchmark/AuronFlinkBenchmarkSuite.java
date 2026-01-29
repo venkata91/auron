@@ -202,13 +202,14 @@ public class AuronFlinkBenchmarkSuite extends AuronFlinkBenchmarkBase {
     }
 
     @Override
-    protected void runBenchmark(String benchmarkName, DataScale scale, String sql) {
-        super.runBenchmark(benchmarkName, scale, sql);
+    protected BenchmarkMetrics[] runBenchmark(String benchmarkName, DataScale scale, String sql) {
+        // Run benchmark and get metrics
+        BenchmarkMetrics[] metrics = super.runBenchmark(benchmarkName, scale, sql);
         
-        // Collect results for summary
-        BenchmarkMetrics flinkMetrics = runWithFlink(sql);
-        BenchmarkMetrics auronMetrics = runWithAuron(sql);
+        // Collect results for summary (metrics[0] = flink, metrics[1] = auron)
         allResults.add(new BenchmarkReporter.BenchmarkResult(
-            benchmarkName, scale, flinkMetrics, auronMetrics));
+            benchmarkName, scale, metrics[0], metrics[1]));
+        
+        return metrics;
     }
 }

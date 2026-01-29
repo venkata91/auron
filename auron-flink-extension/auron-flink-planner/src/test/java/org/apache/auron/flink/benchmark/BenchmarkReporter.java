@@ -90,12 +90,17 @@ public class BenchmarkReporter {
         
         for (BenchmarkResult result : results) {
             if (result.flinkMetrics.isSuccess() && result.auronMetrics.isSuccess()) {
-                double speedup = result.auronMetrics.getSpeedupVs(result.flinkMetrics);
+                // Calculate speedup: Flink time / Auron time (how much faster Auron is)
+                double speedup = (double) result.flinkMetrics.getExecutionTimeMs() / result.auronMetrics.getExecutionTimeMs();
                 totalSpeedup += speedup;
                 successCount++;
                 
-                System.out.println(String.format("%-30s %-8s: %.2fx speedup",
-                    result.name, result.scale, speedup));
+                String speedupStr = speedup >= 1.0 
+                    ? String.format("%.2fx speedup", speedup)
+                    : String.format("%.2fx slower", 1.0 / speedup);
+                
+                System.out.println(String.format("%-30s %-8s: %s",
+                    result.name, result.scale, speedupStr));
             } else {
                 System.out.println(String.format("%-30s %-8s: FAILED",
                     result.name, result.scale));
