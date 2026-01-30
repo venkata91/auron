@@ -119,8 +119,7 @@ public class FlinkTypeConverter {
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                 return new TimestampType(calciteType.getPrecision());
             default:
-                throw new UnsupportedOperationException(
-                    "Unsupported Calcite type: " + calciteType.getSqlTypeName());
+                throw new UnsupportedOperationException("Unsupported Calcite type: " + calciteType.getSqlTypeName());
         }
     }
 

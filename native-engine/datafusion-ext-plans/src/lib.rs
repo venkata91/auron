@@ -40,7 +40,6 @@ pub mod joins;
 pub mod limit_exec;
 pub mod orc_exec;
 pub mod parquet_exec;
-#[cfg(not(feature = "flink"))]
 pub mod parquet_sink_exec;
 pub mod project_exec;
 pub mod rename_columns_exec;

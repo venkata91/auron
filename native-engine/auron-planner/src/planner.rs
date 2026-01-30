@@ -60,6 +60,8 @@ use datafusion_ext_exprs::{
     spark_scalar_subquery_wrapper::SparkScalarSubqueryWrapperExpr,
     spark_udf_wrapper::SparkUDFWrapperExpr,
 };
+#[cfg(feature = "flink")]
+use datafusion_ext_plans::parquet_sink_exec::ParquetSinkExec;
 use datafusion_ext_plans::{
     agg::{
         AggExecMode, AggExpr, AggFunction, AggMode, GroupingExpr,
@@ -795,9 +797,18 @@ impl PhysicalPlanner {
                 )))
             }
             #[cfg(feature = "flink")]
-            PhysicalPlanType::ParquetSink(_) => Err(PlanError::General(
-                "ParquetSink not supported in Flink builds".to_string(),
-            )),
+            PhysicalPlanType::ParquetSink(parquet_sink) => {
+                let mut props: Vec<(String, String)> = vec![];
+                for prop in &parquet_sink.prop {
+                    props.push((prop.key.clone(), prop.value.clone()));
+                }
+                Ok(Arc::new(ParquetSinkExec::new(
+                    convert_box_required!(self, parquet_sink.input)?,
+                    parquet_sink.fs_resource_id.clone(),
+                    parquet_sink.num_dyn_parts as usize,
+                    props,
+                )))
+            }
         }
     }
 

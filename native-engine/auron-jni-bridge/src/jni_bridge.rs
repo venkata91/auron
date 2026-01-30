@@ -462,7 +462,6 @@ pub struct JavaClasses<'a> {
     pub cAuronCallNativeWrapper: AuronCallNativeWrapper<'a>,
     #[cfg(not(feature = "flink"))]
     pub cAuronOnHeapSpillManager: AuronOnHeapSpillManager<'a>,
-    #[cfg(not(feature = "flink"))]
     pub cAuronNativeParquetSinkUtils: AuronNativeParquetSinkUtils<'a>,
     #[cfg(not(feature = "flink"))]
     pub cAuronBlockObject: AuronBlockObject<'a>,
@@ -571,7 +570,6 @@ impl JavaClasses<'static> {
 
             #[cfg(not(feature = "flink"))]
             let c_auron_on_heap_spill_manager = AuronOnHeapSpillManager::new(env)?;
-            #[cfg(not(feature = "flink"))]
             let c_auron_native_parquet_sink_utils = AuronNativeParquetSinkUtils::new(env)?;
             #[cfg(not(feature = "flink"))]
             let c_auron_block_object = AuronBlockObject::new(env)?;
@@ -640,7 +638,6 @@ impl JavaClasses<'static> {
                 cAuronCallNativeWrapper: c_auron_call_native_wrapper,
                 #[cfg(not(feature = "flink"))]
                 cAuronOnHeapSpillManager: c_auron_on_heap_spill_manager,
-                #[cfg(not(feature = "flink"))]
                 cAuronNativeParquetSinkUtils: c_auron_native_parquet_sink_utils,
                 #[cfg(not(feature = "flink"))]
                 cAuronBlockObject: c_auron_block_object,
@@ -1678,6 +1675,41 @@ pub struct AuronNativeParquetSinkUtils<'a> {
 impl<'a> AuronNativeParquetSinkUtils<'a> {
     pub const SIG_TYPE: &'static str =
         "org/apache/spark/sql/execution/auron/plan/NativeParquetSinkUtils";
+
+    pub fn new(env: &JNIEnv<'a>) -> JniResult<AuronNativeParquetSinkUtils<'a>> {
+        let class = get_global_jclass(env, Self::SIG_TYPE)?;
+        Ok(AuronNativeParquetSinkUtils {
+            class,
+            method_getTaskOutputPath: env.get_static_method_id(
+                class,
+                "getTaskOutputPath",
+                "()Ljava/lang/String;",
+            )?,
+            method_getTaskOutputPath_ret: ReturnType::Object,
+            method_completeOutput: env.get_static_method_id(
+                class,
+                "completeOutput",
+                "(Ljava/lang/String;JJ)V",
+            )?,
+            method_completeOutput_ret: ReturnType::Primitive(Primitive::Void),
+        })
+    }
+}
+
+#[allow(non_snake_case)]
+#[cfg(feature = "flink")]
+pub struct AuronNativeParquetSinkUtils<'a> {
+    pub class: JClass<'a>,
+    pub method_getTaskOutputPath: JStaticMethodID,
+    pub method_getTaskOutputPath_ret: ReturnType,
+    pub method_completeOutput: JStaticMethodID,
+    pub method_completeOutput_ret: ReturnType,
+}
+
+#[cfg(feature = "flink")]
+impl<'a> AuronNativeParquetSinkUtils<'a> {
+    pub const SIG_TYPE: &'static str =
+        "org/apache/auron/flink/planner/execution/FlinkParquetSinkUtils";
 
     pub fn new(env: &JNIEnv<'a>) -> JniResult<AuronNativeParquetSinkUtils<'a>> {
         let class = get_global_jclass(env, Self::SIG_TYPE)?;

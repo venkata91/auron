@@ -26,7 +26,9 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.catalog.ContextResolvedTable;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecCalc;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSink;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecTableSourceScan;
+import org.apache.flink.table.planner.plan.nodes.exec.spec.DynamicTableSinkSpec;
 import org.apache.flink.table.planner.plan.nodes.exec.spec.DynamicTableSourceSpec;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -70,7 +72,13 @@ public class AuronExecNodeConverter {
     public static PhysicalPlanNode convert(ExecNode<?> node, List<ExecNode<?>> inputs) {
         LOG.info("Converting Flink ExecNode to Auron plan: {}", node.getDescription());
 
-        // Pattern 1: BatchExecCalc on top of TableSourceScan
+        // Pattern 1: End-to-end native execution (Source -> [Transforms] -> Sink)
+        // BatchExecSink with native-compatible input chain
+        if (node instanceof BatchExecSink && inputs.size() == 1) {
+            return convertSinkWithInput((BatchExecSink) node, inputs.get(0));
+        }
+
+        // Pattern 2: BatchExecCalc on top of TableSourceScan
         if (node instanceof BatchExecCalc && inputs.size() == 1) {
             ExecNode<?> input = inputs.get(0);
             if (input instanceof CommonExecTableSourceScan) {
@@ -78,7 +86,7 @@ public class AuronExecNodeConverter {
             }
         }
 
-        // Pattern 2: Just TableSourceScan (no calc)
+        // Pattern 3: Just TableSourceScan (no calc)
         if (node instanceof CommonExecTableSourceScan) {
             return convertScanOnly((CommonExecTableSourceScan) node);
         }
@@ -172,6 +180,71 @@ public class AuronExecNodeConverter {
     }
 
     /**
+     * Applies a Calc transformation (projections and filters) on top of an input plan.
+     * This is used when the Calc is not directly on the source.
+     *
+     * @param calc The Calc node containing filter/projection
+     * @param inputPlan The input physical plan
+     * @return The Auron PhysicalPlanNode with Calc applied
+     */
+    private static PhysicalPlanNode convertCalcOnPlan(BatchExecCalc calc, PhysicalPlanNode inputPlan) {
+        LOG.debug("Applying Calc transformation on existing plan");
+
+        // Extract calc information - access protected fields via reflection
+        List<RexNode> projections = null;
+        RexNode condition = null;
+        try {
+            java.lang.reflect.Field projectionField =
+                    calc.getClass().getSuperclass().getDeclaredField("projection");
+            projectionField.setAccessible(true);
+            projections = (List<RexNode>) projectionField.get(calc);
+
+            java.lang.reflect.Field conditionField =
+                    calc.getClass().getSuperclass().getDeclaredField("condition");
+            conditionField.setAccessible(true);
+            condition = (RexNode) conditionField.get(calc);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract projection/condition from calc node", e);
+        }
+
+        LOG.debug(
+                "Calc has {} projections and {} filter",
+                projections != null ? projections.size() : 0,
+                condition != null ? "a" : "no");
+
+        // Get input and output schemas
+        // For now, we get the input schema from the Calc's input edges
+        RowType inputSchema = null;
+        List<org.apache.flink.table.planner.plan.nodes.exec.ExecEdge> edges = calc.getInputEdges();
+        if (edges.size() == 1) {
+            inputSchema = (RowType) edges.get(0).getSource().getOutputType();
+        }
+        RowType calcOutputSchema = (RowType) calc.getOutputType();
+
+        PhysicalPlanNode resultPlan = inputPlan;
+
+        // Apply filter if present
+        if (condition != null) {
+            List<RexNode> filterConditions = AuronFlinkConverters.splitAndConditions(condition);
+            LOG.debug("Applying {} filter conditions", filterConditions.size());
+            resultPlan = AuronFlinkConverters.convertFilter(resultPlan, filterConditions, inputSchema.getFieldNames());
+        }
+
+        // Apply projection if present
+        if (projections != null && !projections.isEmpty()) {
+            List<String> outputFieldNames = calcOutputSchema.getFieldNames();
+            List<LogicalType> outputTypes = new ArrayList<>(calcOutputSchema.getChildren());
+            List<String> inputFieldNames = inputSchema.getFieldNames();
+
+            LOG.debug("Applying projection with {} expressions", projections.size());
+            resultPlan = AuronFlinkConverters.convertProjection(
+                    resultPlan, projections, outputFieldNames, outputTypes, inputFieldNames);
+        }
+
+        return resultPlan;
+    }
+
+    /**
      * Converts a table source scan without any calc operations.
      *
      * @param scan The table source scan node
@@ -202,6 +275,104 @@ public class AuronExecNodeConverter {
                 1, // numPartitions - will be set by runtime
                 0 // partitionIndex - will be set by runtime
                 );
+    }
+
+    /**
+     * Converts an end-to-end native execution chain: Source -> [Transforms] -> Sink.
+     *
+     * <p>This is the key method for achieving zero-conversion performance. It builds
+     * a complete native plan where data stays in Arrow format from source to sink.
+     *
+     * @param sink The sink node
+     * @param input The input node (already converted if it was native-compatible)
+     * @return The Auron PhysicalPlanNode with complete source->sink pipeline
+     */
+    private static PhysicalPlanNode convertSinkWithInput(BatchExecSink sink, ExecNode<?> input) {
+        LOG.info("Converting end-to-end native pipeline: Source -> Transforms -> Sink");
+
+        // Step 1: Build the input plan (source + optional transforms)
+        PhysicalPlanNode inputPlan = convertInputChain(input);
+
+        // Step 2: Extract sink information
+        DynamicTableSinkSpec sinkSpec = sink.getTableSinkSpec();
+        String outputPath = extractSinkOutputPath(sinkSpec);
+        LOG.info("Sink output path: {}", outputPath);
+
+        // Step 3: Build ParquetSink wrapping the input plan
+        RowType inputSchema = (RowType) input.getOutputType();
+        return AuronFlinkConverters.convertParquetSink(
+                inputPlan,
+                outputPath,
+                inputSchema,
+                java.util.Collections.emptyList() // Parquet properties - TODO: extract from sink config
+                );
+    }
+
+    /**
+     * Converts an input chain (source + optional transforms) to a native plan.
+     * Recursively handles: Source, Source+Calc, Source+Filter+Calc, etc.
+     */
+    private static PhysicalPlanNode convertInputChain(ExecNode<?> node) {
+        // If it's already wrapped in an AuronBatchExecNode, unwrap it to get the original node
+        if (node.getClass().getSimpleName().equals("AuronBatchExecNode")) {
+            try {
+                // Use reflection to get the original node (not the inputs)
+                java.lang.reflect.Method getOriginalNodeMethod = node.getClass().getMethod("getOriginalNode");
+                ExecNode<?> originalNode = (ExecNode<?>) getOriginalNodeMethod.invoke(node);
+
+                if (originalNode != null) {
+                    LOG.debug(
+                            "Unwrapping AuronBatchExecNode to get original node: {}",
+                            originalNode.getClass().getSimpleName());
+                    return convertInputChain(originalNode);
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to unwrap AuronBatchExecNode: {}", e.getMessage());
+            }
+        }
+
+        // If it's a Calc, recursively convert its input and apply Calc on top
+        if (node instanceof BatchExecCalc) {
+            List<org.apache.flink.table.planner.plan.nodes.exec.ExecEdge> edges = node.getInputEdges();
+            if (edges.size() == 1) {
+                ExecNode<?> input = edges.get(0).getSource();
+                // Recursively convert the input (which could be a source, filter, or another calc)
+                PhysicalPlanNode inputPlan = convertInputChain(input);
+                // Apply the Calc transformation on top of the input
+                return convertCalcOnPlan((BatchExecCalc) node, inputPlan);
+            }
+        }
+
+        // If it's just a source
+        if (node instanceof CommonExecTableSourceScan) {
+            return convertScanOnly((CommonExecTableSourceScan) node);
+        }
+
+        throw new UnsupportedOperationException(
+                "Unsupported input chain for sink: " + node.getClass().getSimpleName());
+    }
+
+    /**
+     * Extracts the output path from a table sink spec.
+     */
+    private static String extractSinkOutputPath(DynamicTableSinkSpec sinkSpec) {
+        try {
+            // Get the table options which contain the 'path' property
+            ContextResolvedTable resolvedTable = sinkSpec.getContextResolvedTable();
+            java.util.Map<String, String> options =
+                    resolvedTable.getResolvedTable().getOptions();
+
+            String path = options.get("path");
+            if (path == null) {
+                throw new RuntimeException("Sink table does not have 'path' option");
+            }
+
+            LOG.debug("Extracted sink path: {}", path);
+            return path;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract output path from sink spec", e);
+        }
     }
 
     /**
@@ -258,7 +429,9 @@ public class AuronExecNodeConverter {
             }
 
             if (filePaths.isEmpty()) {
-                LOG.info("Resolved table options: {}", resolvedTable.getResolvedTable().getOptions());
+                LOG.info(
+                        "Resolved table options: {}",
+                        resolvedTable.getResolvedTable().getOptions());
                 throw new IllegalStateException(
                         "Could not extract file paths from table source. " + "Check if the path exists: "
                                 + resolvedTable.getResolvedTable().getOptions().get("path"));

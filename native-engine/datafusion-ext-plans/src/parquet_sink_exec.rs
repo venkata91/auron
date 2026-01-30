@@ -76,6 +76,11 @@ impl ParquetSinkExec {
             plan_props: OnceCell::new(),
         }
     }
+
+    // Get the schema from the input plan
+    fn get_schema(&self) -> SchemaRef {
+        self.input.schema()
+    }
 }
 
 impl DisplayAs for ParquetSinkExec {
@@ -139,6 +144,7 @@ impl ExecutionPlan for ParquetSinkExec {
             self.num_dyn_parts,
             &io_time,
             &self.props,
+            self.get_schema(),
         )?);
 
         let input = exec_ctx.execute_with_input_stats(&self.input)?;
@@ -168,6 +174,7 @@ impl ParquetSinkContext {
         num_dyn_parts: usize,
         io_time: &Time,
         props: &[(String, String)],
+        input_schema: SchemaRef, // Add input schema parameter
     ) -> Result<Self> {
         let fs_provider = {
             let resource_id = jni_new_string!(&fs_resource_id)?;
@@ -175,7 +182,8 @@ impl ParquetSinkContext {
             FsProvider::new(jni_new_global_ref!(fs.as_obj())?, io_time)
         };
 
-        // parse hive schema from props
+        // Try to parse hive schema from props, fall back to input schema if not
+        // available
         let hive_schema = match props
             .iter()
             .find(|(key, _)| key == "parquet.hive.schema")
@@ -185,7 +193,10 @@ impl ParquetSinkContext {
             .map(Arc::new)
         {
             Some(hive_schema) => hive_schema,
-            _ => df_execution_err!("missing parquet.hive.schema")?,
+            None => {
+                // Use input schema if Hive schema not provided or failed to parse
+                input_schema
+            }
         };
 
         // parse row group byte size from props
