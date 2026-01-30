@@ -73,6 +73,12 @@ public class AuronTransformationFactory {
 
         LOG.info("Creating Auron transformation for plan type: {}", nativePlan.getPhysicalPlanTypeCase());
 
+        // Check if this is an end-to-end plan including a sink
+        if (nativePlan.hasParquetSink()) {
+            LOG.info("Detected end-to-end native execution with ParquetSink - data will stay in Arrow format!");
+            return createSinkTransformation(nativePlan, planner);
+        }
+
         // Get the execution environment
         StreamExecutionEnvironment env = planner.getExecEnv();
         Configuration config = planner.getTableConfig().getConfiguration();
@@ -147,6 +153,75 @@ public class AuronTransformationFactory {
         transformation.setParallelism(parallelism);
 
         LOG.info("Set explicit parallelism {} for Auron transformation", parallelism);
+
+        return transformation;
+    }
+
+    /**
+     * Creates a transformation for end-to-end native execution including a sink.
+     *
+     * <p><b>CRITICAL for Performance:</b> This method creates a transformation that executes
+     * the complete native pipeline (Source -> Transforms -> Sink) WITHOUT converting to RowData.
+     * Data stays in Arrow format throughout, enabling true native performance benefits.
+     *
+     * <p>The operator behaves like a source (pulls data through the native pipeline) but
+     * produces no output since the sink writes directly to files.
+     *
+     * @param nativePlan The complete native plan including ParquetSink
+     * @param planner The Flink planner
+     * @return A transformation that executes the complete native pipeline
+     */
+    private static Transformation<RowData> createSinkTransformation(PhysicalPlanNode nativePlan, PlannerBase planner) {
+
+        LOG.info("Creating end-to-end native sink transformation (zero-copy Arrow pipeline)");
+
+        // Get the execution environment
+        StreamExecutionEnvironment env = planner.getExecEnv();
+
+        // Extract output path and schema from the sink node
+        org.apache.auron.protobuf.ParquetSinkExecNode sinkNode = nativePlan.getParquetSink();
+        PhysicalPlanNode inputPlan = sinkNode.getInput();
+        String fsResourceId = sinkNode.getFsResourceId();
+
+        // Get the input schema (the schema of data being written)
+        // For now, use a simple approach - extract from the input plan
+        // TODO: Add proper schema extraction from protobuf plan
+        RowType dummySchema = RowType.of(); // Empty schema since we don't produce output
+
+        // Create an operator that executes the complete native plan
+        // The operator will:
+        // 1. Execute native plan (which reads, transforms, and writes)
+        // 2. Produce no output (or just completion metadata)
+        AuronBatchExecutionWrapperOperator sinkOperator = new AuronBatchExecutionWrapperOperator(
+                nativePlan,
+                dummySchema, // No output schema needed for sinks
+                0, // partitionId - will be set by Flink runtime
+                1 // stageId
+                );
+
+        // Create a BOUNDED source transformation
+        // Even though this is logically a sink, it's implemented as a source that
+        // pulls data through the native engine
+        org.apache.flink.streaming.api.operators.StreamSource<RowData, ?> streamSourceOperator =
+                new org.apache.flink.streaming.api.operators.StreamSource<>(sinkOperator);
+
+        Transformation<RowData> transformation = new LegacySourceTransformation<>(
+                "Auron Native Sink (End-to-End)",
+                streamSourceOperator,
+                InternalTypeInfo.of(dummySchema),
+                env.getParallelism(),
+                Boundedness.BOUNDED,
+                true // Enable parallel execution
+                );
+
+        LOG.info("Created end-to-end native sink transformation: parallelism={}", env.getParallelism());
+
+        // Register with environment
+        env.addOperator(transformation);
+
+        // Set metadata
+        transformation.setName("Auron Native End-to-End Pipeline (Source -> Sink)");
+        transformation.setDescription("Auron zero-copy native execution with ParquetSink");
 
         return transformation;
     }

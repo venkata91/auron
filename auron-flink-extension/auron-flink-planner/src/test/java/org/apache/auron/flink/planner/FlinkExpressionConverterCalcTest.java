@@ -52,8 +52,7 @@ public class FlinkExpressionConverterCalcTest {
     @Test
     public void testLowerFunction() {
         // Create LOWER(name) expression
-        RexNode nameCol = rexBuilder.makeInputRef(
-                typeFactory.createSqlType(SqlTypeName.VARCHAR, 255), 1);
+        RexNode nameCol = rexBuilder.makeInputRef(typeFactory.createSqlType(SqlTypeName.VARCHAR, 255), 1);
         RexNode lowerCall = rexBuilder.makeCall(SqlStdOperatorTable.LOWER, nameCol);
 
         // Convert to Auron expression
@@ -77,8 +76,7 @@ public class FlinkExpressionConverterCalcTest {
     @Test
     public void testUpperFunction() {
         // Create UPPER(description) expression
-        RexNode descCol = rexBuilder.makeInputRef(
-                typeFactory.createSqlType(SqlTypeName.VARCHAR, 500), 2);
+        RexNode descCol = rexBuilder.makeInputRef(typeFactory.createSqlType(SqlTypeName.VARCHAR, 500), 2);
         RexNode upperCall = rexBuilder.makeCall(SqlStdOperatorTable.UPPER, descCol);
 
         // Convert to Auron expression

@@ -562,9 +562,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create table
         createParquetTable(
-                "parquet_calc_lower_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_lower_test");
+                "parquet_calc_lower_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_lower_test");
 
         // Execute query with LOWER function
         TableResult result = tableEnvironment.executeSql(
@@ -616,9 +614,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
 
         // Create table
         createParquetTable(
-                "parquet_calc_upper_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_upper_test");
+                "parquet_calc_upper_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_upper_test");
 
         // Execute query with UPPER function
         TableResult result = tableEnvironment.executeSql(
@@ -667,14 +663,12 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         writeParquetTestData(parquetDir, "calc_combined_test", schema, testData);
 
         createParquetTable(
-                "parquet_calc_combined_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_combined_test");
+                "parquet_calc_combined_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_combined_test");
 
         // Execute query with both LOWER and UPPER
-        TableResult result = tableEnvironment.executeSql(
-                "SELECT id, LOWER(name) as lower_name, UPPER(name) as upper_name " +
-                "FROM parquet_calc_combined_test ORDER BY id");
+        TableResult result =
+                tableEnvironment.executeSql("SELECT id, LOWER(name) as lower_name, UPPER(name) as upper_name "
+                        + "FROM parquet_calc_combined_test ORDER BY id");
 
         List<Row> results = collectResults(result);
 
@@ -714,16 +708,13 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         writeParquetTestData(parquetDir, "calc_filter_test", schema, testData);
 
         createParquetTable(
-                "parquet_calc_filter_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_filter_test");
+                "parquet_calc_filter_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_filter_test");
 
         // Execute query: UPPER(name) with filter
         TableResult result = tableEnvironment.executeSql(
-                "SELECT id, UPPER(name) as upper_name, amount " +
-                "FROM parquet_calc_filter_test " +
-                "WHERE amount > 100 " +
-                "ORDER BY id");
+                "SELECT id, UPPER(name) as upper_name, amount " + "FROM parquet_calc_filter_test "
+                        + "WHERE amount > 100 "
+                        + "ORDER BY id");
 
         List<Row> results = collectResults(result);
 
@@ -753,11 +744,8 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         System.out.println("\n🔥 Testing Native CALC with NULL Values");
 
         // Create test data with nulls
-        List<Row> testData = Arrays.asList(
-                row(1, "Alice", 100.5),
-                row(2, null, 200.5),
-                row(3, "Charlie", null),
-                row(4, null, null));
+        List<Row> testData =
+                Arrays.asList(row(1, "Alice", 100.5), row(2, null, 200.5), row(3, "Charlie", null), row(4, null, null));
 
         String schema = "(" + "  id INT," + "  name STRING," + "  amount DOUBLE" + ")";
 
@@ -765,9 +753,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         writeParquetTestData(parquetDir, "calc_null_test", schema, testData);
 
         createParquetTable(
-                "parquet_calc_null_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_null_test");
+                "parquet_calc_null_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_null_test");
 
         // Execute query with LOWER on nullable column
         TableResult result = tableEnvironment.executeSql(
@@ -817,9 +803,7 @@ public class AuronFlinkParquetScanITCase extends AuronFlinkTableTestBase {
         writeParquetTestData(parquetDir, "calc_empty_test", schema, testData);
 
         createParquetTable(
-                "parquet_calc_empty_test",
-                schema,
-                "file://" + parquetDir.getAbsolutePath() + "/calc_empty_test");
+                "parquet_calc_empty_test", schema, "file://" + parquetDir.getAbsolutePath() + "/calc_empty_test");
 
         // Execute query
         TableResult result = tableEnvironment.executeSql(

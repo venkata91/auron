@@ -292,6 +292,13 @@ public class AuronBatchExecutionWrapperOperator extends RichSourceFunction<RowDa
             case PARQUET_SCAN:
                 return plan.getParquetScan().getFsResourceId();
 
+            case PARQUET_SINK:
+                // For ParquetSink, recurse into the input to find the source scan
+                if (plan.getParquetSink().hasInput()) {
+                    return extractResourceIdFromPlan(plan.getParquetSink().getInput());
+                }
+                break;
+
             case PROJECTION:
                 if (plan.getProjection().hasInput()) {
                     return extractResourceIdFromPlan(plan.getProjection().getInput());

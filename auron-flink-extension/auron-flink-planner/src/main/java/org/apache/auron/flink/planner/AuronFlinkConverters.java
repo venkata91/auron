@@ -328,4 +328,110 @@ public class AuronFlinkConverters {
         }
         return getFileSize(pathStr);
     }
+
+    /**
+     * Converts a ParquetSink operation to ParquetSinkExecNode protobuf.
+     * This builds the complete end-to-end native execution plan.
+     *
+     * @param inputPlan The input plan (source + optional transforms)
+     * @param outputPath The output directory path
+     * @param inputSchema The schema of data being written
+     * @param parquetProps Parquet writer properties
+     * @return The PhysicalPlanNode containing ParquetSinkExecNode
+     */
+    public static PhysicalPlanNode convertParquetSink(
+            PhysicalPlanNode inputPlan,
+            String outputPath,
+            RowType inputSchema,
+            List<org.apache.auron.protobuf.ParquetProp> parquetProps) {
+
+        // Generate unique resource ID for FileSystem registration
+        String fsResourceId = "ParquetSink-" + java.util.UUID.randomUUID();
+
+        // Create a mutable list for properties
+        List<org.apache.auron.protobuf.ParquetProp> props = new java.util.ArrayList<>(parquetProps);
+
+        // Add the Hive schema property required by the native engine
+        String hiveSchema = convertToHiveSchema(inputSchema);
+        System.out.println("[DEBUG] Generated Hive schema (" + hiveSchema.length() + " chars)");
+        System.out.println(hiveSchema.replace("\n", "\\n"));
+        props.add(org.apache.auron.protobuf.ParquetProp.newBuilder()
+                .setKey("parquet.hive.schema")
+                .setValue(hiveSchema)
+                .build());
+        System.out.println("[DEBUG] Added property with key: parquet.hive.schema");
+
+        // Build ParquetSinkExecNode
+        org.apache.auron.protobuf.ParquetSinkExecNode.Builder sinkBuilder =
+                org.apache.auron.protobuf.ParquetSinkExecNode.newBuilder()
+                        .setInput(inputPlan)
+                        .setFsResourceId(fsResourceId)
+                        .setNumDynParts(0) // MVP: static partitioning only
+                        .addAllProp(props);
+
+        // Note: The output path is stored in the ParquetSinkContext thread-local
+        // which is set up by the operator before execution
+
+        return PhysicalPlanNode.newBuilder().setParquetSink(sinkBuilder).build();
+    }
+
+    /**
+     * Converts a Flink RowType to Hive schema string format.
+     * Format: message schema { optional TYPE field_name; ... }
+     */
+    private static String convertToHiveSchema(RowType rowType) {
+        StringBuilder schema = new StringBuilder("message schema {\n");
+
+        for (int i = 0; i < rowType.getFieldCount(); i++) {
+            String fieldName = rowType.getFieldNames().get(i);
+            LogicalType fieldType = rowType.getTypeAt(i);
+
+            // Convert Flink type to Parquet/Hive type
+            String parquetType = convertToParquetType(fieldType);
+
+            // All fields are optional for now (nullable)
+            schema.append("  optional ")
+                    .append(parquetType)
+                    .append(" ")
+                    .append(fieldName)
+                    .append(";\n");
+        }
+
+        schema.append("}");
+        return schema.toString();
+    }
+
+    /**
+     * Converts a Flink LogicalType to Parquet primitive type string.
+     */
+    private static String convertToParquetType(LogicalType logicalType) {
+        switch (logicalType.getTypeRoot()) {
+            case BOOLEAN:
+                return "boolean";
+            case TINYINT:
+            case SMALLINT:
+            case INTEGER:
+                return "int32";
+            case BIGINT:
+                return "int64";
+            case FLOAT:
+                return "float";
+            case DOUBLE:
+                return "double";
+            case VARCHAR:
+            case CHAR:
+                return "binary (UTF8)";
+            case DATE:
+                return "int32 (DATE)";
+            case TIMESTAMP_WITHOUT_TIME_ZONE:
+            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                return "int64 (TIMESTAMP_MILLIS)";
+            case DECIMAL:
+                // For decimal, we'd need to extract precision/scale, but for now use a simple format
+                return "binary (DECIMAL)";
+            default:
+                // Default to binary for unsupported types
+                return "binary";
+        }
+    }
 }

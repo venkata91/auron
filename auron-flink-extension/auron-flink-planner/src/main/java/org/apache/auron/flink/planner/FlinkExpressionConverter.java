@@ -19,6 +19,7 @@ package org.apache.auron.flink.planner;
 import com.google.protobuf.ByteString;
 import java.io.ByteArrayOutputStream;
 import java.nio.channels.Channels;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -44,18 +45,17 @@ import org.apache.auron.protobuf.PhysicalExprNode;
 import org.apache.auron.protobuf.PhysicalNot;
 import org.apache.auron.protobuf.PhysicalSCAndExprNode;
 import org.apache.auron.protobuf.PhysicalSCOrExprNode;
+import org.apache.auron.protobuf.PhysicalScalarFunctionNode;
+import org.apache.auron.protobuf.ScalarFunction;
 import org.apache.auron.protobuf.ScalarValue;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.util.NlsString;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.auron.protobuf.PhysicalScalarFunctionNode;
-import org.apache.auron.protobuf.ScalarFunction;
-import org.apache.calcite.sql.SqlOperator;
-import java.util.ArrayList;
 
 /**
  * Converter for Calcite RexNode expressions to Auron PhysicalExprNode protobuf.
@@ -246,21 +246,17 @@ public class FlinkExpressionConverter {
 
         // Get return type
         org.apache.auron.protobuf.ArrowType returnType =
-            FlinkTypeConverter.toArrowType(
-                FlinkTypeConverter.fromCalciteType(call.getType())
-            );
+                FlinkTypeConverter.toArrowType(FlinkTypeConverter.fromCalciteType(call.getType()));
 
         // Build scalar function node
         PhysicalScalarFunctionNode scalarFuncNode = PhysicalScalarFunctionNode.newBuilder()
-            .setName(functionName)
-            .setFun(scalarFunc)
-            .addAllArgs(args)
-            .setReturnType(returnType)
-            .build();
+                .setName(functionName)
+                .setFun(scalarFunc)
+                .addAllArgs(args)
+                .setReturnType(returnType)
+                .build();
 
-        return PhysicalExprNode.newBuilder()
-            .setScalarFunction(scalarFuncNode)
-            .build();
+        return PhysicalExprNode.newBuilder().setScalarFunction(scalarFuncNode).build();
     }
 
     /**
@@ -271,7 +267,7 @@ public class FlinkExpressionConverter {
         String normalized = functionName.toUpperCase();
 
         switch (normalized) {
-            // String functions
+                // String functions
             case "LOWER":
                 return ScalarFunction.Lower;
             case "UPPER":
@@ -290,8 +286,7 @@ public class FlinkExpressionConverter {
             case "REPLACE":
                 return ScalarFunction.Replace;
             default:
-                throw new UnsupportedOperationException(
-                    "Unsupported scalar function: " + functionName);
+                throw new UnsupportedOperationException("Unsupported scalar function: " + functionName);
         }
     }
 
